@@ -9,7 +9,6 @@ from tqdm import tqdm
 
 from PIL import Image
 from matplotlib.path import Path
-from shapely.geometry.polygon import Polygon
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from util.qfabric_dataset import QFabricDataset
