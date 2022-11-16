@@ -54,7 +54,7 @@ def annotate_json(gjson_file, json_file):
     return file
 
 
-def annotate_jsons(gjson_path, json_path):
+def annotate_jsons(gjson_path, json_path, num_workers=8):
 
     new_json_dir = json_path.replace('jsons', 'new_jsons')
     os.makedirs(new_json_dir, exist_ok=True)
@@ -66,7 +66,7 @@ def annotate_jsons(gjson_path, json_path):
     json_files = glob(os.path.join(json_path, '*.json'))
     json_files = sorted(json_files, key=f_name_sort_key)
 
-    with ThreadPoolExecutor(max_workers=8) as exec:
+    with ThreadPoolExecutor(max_workers=num_workers) as exec:
         future_to_file = {exec.submit(annotate_json, gjson_f, json_f): (gjson_f, json_f)
                           for gjson_f, json_f in zip(gjson_files, json_files)}
 
@@ -164,7 +164,7 @@ def create_change_type_mask(raster_files, json_file, change_types):
     return label_mask.reshape(h, w)
 
 
-def create_change_type_masks(raster_dir, json_dir, change_types):
+def create_change_type_masks(raster_dir, json_dir, change_types, num_workers=8):
     out_dir = json_dir.replace('new_jsons', 'change_type_masks')
     os.makedirs(out_dir, exist_ok=True)
 
@@ -182,7 +182,7 @@ def create_change_type_masks(raster_dir, json_dir, change_types):
     assert 5*len(json_files) == len(raster_files), \
         f"Mismatch in num labels {len(json_files)}, and rasters {len(raster_files)}"
 
-    with ThreadPoolExecutor(max_workers=8) as exec:
+    with ThreadPoolExecutor(max_workers=num_workers) as exec:
         future_to_mask = {
             exec.submit(
                 create_change_type_mask,
@@ -230,14 +230,14 @@ def create_tile(array_file, tile_size=224, file_ext='tif'):
     return tiles
 
 
-def create_tiles(array_dir, tile_size=224, file_ext='tif'):
+def create_tiles(array_dir, tile_size=224, file_ext='tif', num_workers=8):
 
     dir_name = array_dir.split(os.path.sep)[-1]
     out_dir = array_dir.replace(dir_name, f'tile_{dir_name}')
     os.makedirs(out_dir, exist_ok=True)
 
     files = glob(os.path.join(array_dir, f'*.{file_ext}'))
-    with ThreadPoolExecutor(max_workers=8) as exec:
+    with ThreadPoolExecutor(max_workers=num_workers) as exec:
         future_to_file = {exec.submit(create_tile, f_path, tile_size, file_ext): f_path
                           for f_path in files}
 
@@ -272,27 +272,28 @@ def f_name_sort_key(f_name):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Run preprocessing for QFabric')
-    parser.add_argument('--do', choices=['jsons', 'change_type_masks', 'csv'], type=str, default='jsons',
+    parser.add_argument('--do', choices=['jsons', 'change_type_masks', 'csv', 'tile'], type=str, default='jsons',
                         help='Which functionality to perform')
     parser.add_argument('--data_path', default='./QFabric', type=str, help='Root dir of QFabric dataset')
     parser.add_argument('--gjson_dir', default='./QFabric/QFabric_Labels/geojsons')
     parser.add_argument('--json_dir', default='./QFabric/QFabric_Labels/jsons')
     parser.add_argument('--raster_dir', default='./QFabric/rasters/')
     parser.add_argument('--mask_dir', default='./QFabric/labels/change_type_masks')
+    parser.add_argument('--num_workers', default=8, type=int)
 
     args = parser.parse_args()
 
     if args.do == 'jsons':
         print('Annotating jsons with geojson data.')
-        annotate_jsons(args.gjson_dir, args.json_dir)
+        annotate_jsons(args.gjson_dir, args.json_dir, args.num_workers)
     elif args.do == 'change_type_masks':
         print('Creating change type masks for each location (1 per location)')
-        create_change_type_masks(args.raster_dir, args.json_dir, QFabricDataset.CHANGE_TYPES)
+        create_change_type_masks(args.raster_dir, args.json_dir, QFabricDataset.CHANGE_TYPES, args.num_workers)
     elif args.do == 'tile':
         print('Tiling rasters to smaller arrays')
-        create_tiles(args.raster_dir, tile_size=224, file_ext='tif')
+        create_tiles(args.raster_dir, tile_size=224, file_ext='tif', num_workers=args.num_workers)
         print('Tiling change type masks to smaller arrays')
-        create_tiles(args.masks_dir, tile_size=224, file_ext='png')
+        create_tiles(args.masks_dir, tile_size=224, file_ext='png', num_workers=args.num_workers)
         pass
     elif args.do == 'csv':
         print('Creating train-val-test csv files')
