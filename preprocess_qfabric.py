@@ -250,8 +250,6 @@ def create_tiles(array_dir, tile_size=224, file_ext='tif', num_workers=8):
 
             f_path = future_to_file[future]
             for i, tile in enumerate(tiles):
-                tile = np.squeeze(tile, axis=0)  # (3, h, w) or (h, w)
-
                 f_name = f_path.split(os.path.sep)[-1]
                 components = f_name.split('.')
                 components.insert(-1, f't{i}')
@@ -260,8 +258,10 @@ def create_tiles(array_dir, tile_size=224, file_ext='tif', num_workers=8):
                 out_f_path.replace('.tif', '.png')
 
                 if len(tile.shape) == 3:
-                    tile = tile.transpose((1,2,0))
-                im = Image.fromarray(tile, mode='L' if len(tile.shape) == 2 else 'RGB')
+                    tile = tile.transpose((1, 2, 0))  # (h, w, 3)
+                else:
+                    tile = np.squeeze(tile, axis=0)  # (h, w)
+                im = Image.fromarray(tile, mode='RGB' if len(tile.shape) == 3 else 'L')
                 im.save(out_f_path)
 
 
