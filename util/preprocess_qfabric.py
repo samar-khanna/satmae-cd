@@ -145,7 +145,7 @@ def create_change_type_mask(raster_files, json_file, change_types):
 
     # # ASSUME: NO OVERLAP
     label_mask = np.zeros((h, w), dtype=np.uint8)
-    for shape in tqdm(labels['shapes'], total=len(labels['shapes'])):
+    for shape in labels['shapes']:
         label = shape['properties']['change_type']
         label_idx = change_types.index(label)
 
