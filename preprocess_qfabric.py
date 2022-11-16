@@ -204,7 +204,7 @@ def create_change_type_masks(raster_dir, json_dir, change_types, num_workers=8):
             mask.save(os.path.join(out_dir, f"{idx}.png"))
 
 
-def create_tile(array_file, tile_size=224, file_ext='tif'):
+def create_tile(array_file, out_dir, tile_size=224, file_ext='tif'):
     if file_ext == 'tif':
         with rasterio.open(array_file) as rst:
             img = rst.read()  # (3, h, w)
@@ -227,42 +227,39 @@ def create_tile(array_file, tile_size=224, file_ext='tif'):
     img = img.reshape(c, h_t, tile_size, w_t, tile_size)  # (c, h//t, t, w//t, t)
     img = np.einsum('chpwq->hwcpq', img)  # (h//t,w//t,c,t,t)
     tiles = img.reshape(h_t * w_t, c, tile_size, tile_size)  # (h//t*w//t, c, t, t)
-    return tiles
+
+    for i, tile in enumerate(tiles):
+        f_name = os.path.split(array_file)[-1]
+        components = f_name.split('.')
+        components.insert(-1, f't{i}')
+        out_f_name = '.'.join(components).replace('.tif', '.png')
+
+        out_f_path = os.path.join(out_dir, out_f_name)
+
+        if len(tile.shape) == 3:
+            tile = tile.transpose((1, 2, 0))  # (h, w, 3)
+        else:
+            tile = np.squeeze(tile, axis=0)  # (h, w)
+        im = Image.fromarray(tile, mode='RGB' if len(tile.shape) == 3 else 'L')
+        im.save(out_f_path)
 
 
 def create_tiles(array_dir, tile_size=224, file_ext='tif', num_workers=8):
 
-    dir_name = array_dir.split(os.path.sep)[-1]
+    dir_name = os.path.dirname(array_dir).split(os.path.sep)[-1]
     out_dir = array_dir.replace(dir_name, f'tile_{dir_name}')
     os.makedirs(out_dir, exist_ok=True)
 
     files = glob(os.path.join(array_dir, f'*.{file_ext}'))
     with ThreadPoolExecutor(max_workers=num_workers) as exec:
-        future_to_file = {exec.submit(create_tile, f_path, tile_size, file_ext): f_path
+        future_to_file = {exec.submit(create_tile, f_path, out_dir, tile_size, file_ext): f_path
                           for f_path in files}
 
         pbar = tqdm(as_completed(future_to_file), total=len(future_to_file))
         for future in pbar:
-            try:
-                tiles = future.result()
-            except Exception as e:
-                raise e
-
-            f_path = future_to_file[future]
-            for i, tile in enumerate(tiles):
-                f_name = f_path.split(os.path.sep)[-1]
-                components = f_name.split('.')
-                components.insert(-1, f't{i}')
-
-                out_f_path = f_path.replace(f_name, '.'.join(components))
-                out_f_path.replace('.tif', '.png')
-
-                if len(tile.shape) == 3:
-                    tile = tile.transpose((1, 2, 0))  # (h, w, 3)
-                else:
-                    tile = np.squeeze(tile, axis=0)  # (h, w)
-                im = Image.fromarray(tile, mode='RGB' if len(tile.shape) == 3 else 'L')
-                im.save(out_f_path)
+            exception = future.exception()
+            if exception is not None:
+                raise exception
 
 
 def f_name_sort_key(f_name):
