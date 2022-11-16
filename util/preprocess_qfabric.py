@@ -278,6 +278,7 @@ if __name__ == "__main__":
     parser.add_argument('--gjson_dir', default='./QFabric/QFabric_Labels/geojsons')
     parser.add_argument('--json_dir', default='./QFabric/QFabric_Labels/jsons')
     parser.add_argument('--raster_dir', default='./QFabric/rasters/')
+    parser.add_argument('--mask_dir', default='./QFabric/labels/change_type_masks')
 
     args = parser.parse_args()
 
@@ -288,8 +289,10 @@ if __name__ == "__main__":
         print('Creating change type masks for each location (1 per location)')
         create_change_type_masks(args.raster_dir, args.json_dir, QFabricDataset.CHANGE_TYPES)
     elif args.do == 'tile':
-        print('Tiling change-type masks and rasters to smaller arrays')
-
+        print('Tiling rasters to smaller arrays')
+        create_tiles(args.raster_dir, tile_size=224, file_ext='tif')
+        print('Tiling change type masks to smaller arrays')
+        create_tiles(args.masks_dir, tile_size=224, file_ext='png')
         pass
     elif args.do == 'csv':
         print('Creating train-val-test csv files')
