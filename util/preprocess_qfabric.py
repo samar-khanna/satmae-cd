@@ -7,9 +7,10 @@ import numpy as np
 from glob import glob
 from tqdm import tqdm
 
+from math import floor, ceil
 from PIL import Image
 from matplotlib.path import Path
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_completed
 
 from util.qfabric_dataset import QFabricDataset
 
@@ -81,6 +82,29 @@ def annotate_jsons(gjson_path, json_path):
                 json.dump(new_json, f, indent=2)
 
 
+def gen_grid_points(x_min, x_max, y_min, y_max):
+    # make a canvas with pixel coordinates
+    x, y = np.meshgrid(np.arange(x_min, x_max), np.arange(y_min, y_max))
+    x, y = x.reshape(-1), y.reshape(-1)
+    # A list of all pixels in terms of indices
+    coords = np.vstack((x, y)).T  # ((x_max-x_min-1)*(y_max-y_min-1), 2)
+    return coords
+
+
+def poly_mask(polygon_coords, w_max, h_max):
+    x_min, x_max = np.min(polygon_coords[:, 0]), np.max(polygon_coords[:, 0])
+    y_min, y_max = np.min(polygon_coords[:, 1]), np.max(polygon_coords[:, 1])
+
+    x_min, x_max = max(0, floor(x_min)), min(w_max, ceil(x_max+1))
+    y_min, y_max = max(0, floor(y_min)), min(h_max, ceil(y_max+1))
+    valid_coords = gen_grid_points(x_min, x_max, y_min, y_max)  # ((x_max-x_min)*(y_max-y_min), 2)
+
+    # Only need to find polygon mask within the rectangular patch containing the polygon
+    path = Path(polygon_coords)
+    coords_mask = path.contains_points(valid_coords)
+    return coords_mask, (x_min, x_max, y_min, y_max)
+
+
 def create_change_type_mask(raster_files, json_file, change_types):
     raster_file = raster_files[0]
     with rasterio.open(raster_file) as raster:
@@ -90,23 +114,52 @@ def create_change_type_mask(raster_files, json_file, change_types):
     with open(json_file, 'r') as f:
         labels = json.load(f)
 
-    # make a canvas with pixel coordinates
-    x, y = np.meshgrid(np.arange(w), np.arange(h))
-    x, y = x.reshape(-1), y.reshape(-1)
-    # A list of all pixels in terms of indices
-    all_coords = np.vstack((x, y)).T  # (h*w, 2)
+    all_coords = gen_grid_points(0, w, 0, h)  # (h*w, 2)
+    assert all_coords.shape == (h*w, 2)
 
-    # ASSUME: NO OVERLAP
-    label_mask = np.zeros(h*w, dtype=np.uint8)
-    for shape in labels['shapes']:
+    # all_polygons = [np.array(shape['points']) for shape in labels['shapes']]
+    # label_mask = np.zeros(h * w, dtype=np.uint8)
+    # with ThreadPoolExecutor(max_workers=32) as ex:
+    #     future_to_shape = {ex.submit(poly_mask, poly_coords): i
+    #                        for i, poly_coords in enumerate(all_polygons)}
+    #
+    #     for future in tqdm(as_completed(future_to_shape), total=len(future_to_shape)):
+    #         try:
+    #             intersection_mask, bounds = future.result()
+    #         except Exception as e:
+    #             raise e
+    #
+    #         shape_idx = future_to_shape[future]
+    #
+    #         label = labels['shapes'][shape_idx]['properties']['change_type']
+    #         label_idx = change_types.index(label)
+    #
+    #         x_min, x_max, y_min, y_max = bounds
+    #
+    #         fill_values = label_mask[y_min:y_max, x_min:x_max]
+    #         f_h, f_w = fill_values.shape
+    #         fill_values = fill_values.reshape(-1)
+    #         fill_values[intersection_mask] = label_idx
+    #
+    #         label_mask[y_min:y_max, x_min:x_max] = fill_values.reshape(f_h, f_w)
+
+    # # ASSUME: NO OVERLAP
+    label_mask = np.zeros((h, w), dtype=np.uint8)
+    for shape in tqdm(labels['shapes'], total=len(labels['shapes'])):
         label = shape['properties']['change_type']
         label_idx = change_types.index(label)
 
-        points = np.array(shape['points'])  # (P, 2)
-        path = Path(points)
-        coords_mask = path.contains_points(all_coords)
+        poly_coords = np.array(shape['points'])  # (P, 2)
 
-        label_mask[coords_mask] = label_idx
+        intersection_mask, bounds = poly_mask(poly_coords, w, h)
+        x_min, x_max, y_min, y_max = bounds
+
+        fill_values = label_mask[y_min:y_max, x_min:x_max]
+        f_h, f_w = fill_values.shape
+        fill_values = fill_values.reshape(-1)
+        fill_values[intersection_mask] = label_idx
+
+        label_mask[y_min:y_max, x_min:x_max] = fill_values.reshape(f_h, f_w)
 
     return label_mask.reshape(h, w)
 
