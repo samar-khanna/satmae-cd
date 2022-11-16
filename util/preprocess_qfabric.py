@@ -208,7 +208,7 @@ def create_tile(array_file, tile_size=224, file_ext='tif'):
     if file_ext == 'tif':
         with rasterio.open(array_file) as rst:
             img = rst.read()  # (3, h, w)
-            h, w = rst.height. rst.width
+            h, w = rst.height, rst.width
             c = rst.count
     elif file_ext == 'png':
         img = Image.open(array_file)
