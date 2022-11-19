@@ -14,6 +14,9 @@ from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_compl
 
 from util.qfabric_dataset import QFabricDataset
 
+HEIGHT = 9928
+WIDTH = 9796
+
 
 def annotate_json(gjson_file, json_file):
     with open(gjson_file, 'r') as f:
@@ -105,51 +108,37 @@ def poly_mask(polygon_coords, w_max, h_max):
     return coords_mask, (x_min, x_max, y_min, y_max)
 
 
-def create_change_type_mask(raster_files, json_file, change_types):
-    raster_file = raster_files[0]
-    with rasterio.open(raster_file) as raster:
-        h = raster.height
-        w = raster.width
+def create_change_type_mask(json_file, change_types):
+    # raster_file = raster_files[0]
 
     with open(json_file, 'r') as f:
         labels = json.load(f)
 
-    all_coords = gen_grid_points(0, w, 0, h)  # (h*w, 2)
-    assert all_coords.shape == (h*w, 2)
+    h, w = HEIGHT, WIDTH
 
-    # all_polygons = [np.array(shape['points']) for shape in labels['shapes']]
-    # label_mask = np.zeros(h * w, dtype=np.uint8)
-    # with ThreadPoolExecutor(max_workers=32) as ex:
-    #     future_to_shape = {ex.submit(poly_mask, poly_coords): i
-    #                        for i, poly_coords in enumerate(all_polygons)}
-    #
-    #     for future in tqdm(as_completed(future_to_shape), total=len(future_to_shape)):
-    #         try:
-    #             intersection_mask, bounds = future.result()
-    #         except Exception as e:
-    #             raise e
-    #
-    #         shape_idx = future_to_shape[future]
-    #
-    #         label = labels['shapes'][shape_idx]['properties']['change_type']
-    #         label_idx = change_types.index(label)
-    #
-    #         x_min, x_max, y_min, y_max = bounds
-    #
-    #         fill_values = label_mask[y_min:y_max, x_min:x_max]
-    #         f_h, f_w = fill_values.shape
-    #         fill_values = fill_values.reshape(-1)
-    #         fill_values[intersection_mask] = label_idx
-    #
-    #         label_mask[y_min:y_max, x_min:x_max] = fill_values.reshape(f_h, f_w)
+    # # based on coco jsons
+    # raster_info = labels['images'][0]
+    # h, w = raster_info['height'], raster_info['width']
+
+    # # based on old jsons
+    # raster_file = os.path.split(raster_info['file_name'])[-1]
+    # raster_file = os.path.join(raster_dir, raster_file)
+    # with rasterio.open(raster_file) as raster:
+    #     h = raster.height
+    #     w = raster.width
+
+    # all_coords = gen_grid_points(0, w, 0, h)  # (h*w, 2)
+    # assert all_coords.shape == (h*w, 2)
 
     # # ASSUME: NO OVERLAP
     label_mask = np.zeros((h, w), dtype=np.uint8)
+    # for shape in labels['annotations']:
+    #     label_idx = shape['properties'][0]['labels'][0] + 1  # get change_type idx, + 1 to distinguish no_change
     for shape in labels['shapes']:
         label = shape['properties']['change_type']
         label_idx = change_types.index(label)
 
-        poly_coords = np.array(shape['points'])  # (P, 2)
+        poly_coords = np.array(shape['points']).reshape(-1, 2)  # (P, 2)
 
         intersection_mask, bounds = poly_mask(poly_coords, w, h)
         x_min, x_max, y_min, y_max = bounds
@@ -161,32 +150,32 @@ def create_change_type_mask(raster_files, json_file, change_types):
 
         label_mask[y_min:y_max, x_min:x_max] = fill_values.reshape(f_h, f_w)
 
-    return label_mask.reshape(h, w)
+    return label_mask
 
 
-def create_change_type_masks(raster_dir, json_dir, change_types, num_workers=8):
-    out_dir = json_dir.replace('new_jsons', 'change_type_masks')
+def create_change_type_masks(json_dir, change_types, num_workers=8):
+    dir_name = os.path.dirname(os.path.relpath(json_dir))
+    out_dir = os.path.join(dir_name, 'change_type_masks')
     os.makedirs(out_dir, exist_ok=True)
 
     json_files = glob(os.path.join(json_dir, '*.json'))
+    # json_files = [f for f in json_files if not f.endswith('metadata.json')]
     json_files = sorted(json_files, key=f_name_sort_key)
 
-    def raster_sort_key(f_path):
-        f_name = f_path.split(os.path.sep)[-1]
-        f_id, d, date_str, _ = f_name.split('.')
-        return (int(f_id), d)
-
-    raster_files = glob(os.path.join(raster_dir, '*.tif'))
-    raster_files = sorted(raster_files, key=raster_sort_key)
-
-    assert 5*len(json_files) == len(raster_files), \
-        f"Mismatch in num labels {len(json_files)}, and rasters {len(raster_files)}"
+    # def raster_sort_key(f_path):
+    #     f_name = f_path.split(os.path.sep)[-1]
+    #     f_id, d, date_str, _ = f_name.split('.')
+    #     return (int(f_id), d)
+    # raster_files = glob(os.path.join(raster_dir, '*.tif'))
+    # raster_files = sorted(raster_files, key=raster_sort_key)
+    #
+    # assert 5*len(json_files) == len(raster_files), \
+    #     f"Mismatch in num labels {len(json_files)}, and rasters {len(raster_files)}"
 
     with ThreadPoolExecutor(max_workers=num_workers) as exec:
         future_to_mask = {
             exec.submit(
                 create_change_type_mask,
-                raster_files[5*i:5*i + 5],
                 json_files[i],
                 change_types,
             ): i
@@ -200,8 +189,11 @@ def create_change_type_masks(raster_dir, json_dir, change_types, num_workers=8):
                 raise e
 
             idx = future_to_mask[future]
+            json_file = json_files[idx]
+            f_name = os.path.split(json_file)[-1]
+
             mask = Image.fromarray(mask)
-            mask.save(os.path.join(out_dir, f"{idx}.png"))
+            mask.save(os.path.join(out_dir, f"{f_name.replace('.json', '')}.png"))
 
 
 def create_tile(array_file, out_dir, tile_size=224, file_ext='tif'):
@@ -274,6 +266,7 @@ if __name__ == "__main__":
     parser.add_argument('--data_path', default='./QFabric', type=str, help='Root dir of QFabric dataset')
     parser.add_argument('--gjson_dir', default='./QFabric/QFabric_Labels/geojsons')
     parser.add_argument('--json_dir', default='./QFabric/QFabric_Labels/jsons')
+    parser.add_argument('--csv', default='./random-split1_2022_11_09-18_39_08/CSV/train.csv')
     parser.add_argument('--raster_dir', default='./QFabric/rasters/')
     parser.add_argument('--mask_dir', default='./QFabric/labels/change_type_masks')
     parser.add_argument('--num_workers', default=8, type=int)
@@ -285,7 +278,7 @@ if __name__ == "__main__":
         annotate_jsons(args.gjson_dir, args.json_dir, args.num_workers)
     elif args.do == 'change_type_masks':
         print('Creating change type masks for each location (1 per location)')
-        create_change_type_masks(args.raster_dir, args.json_dir, QFabricDataset.CHANGE_TYPES, args.num_workers)
+        create_change_type_masks(args.json_dir, QFabricDataset.CHANGE_TYPES, args.num_workers)
     elif args.do == 'tile':
         print('Tiling rasters to smaller arrays')
         create_tiles(args.raster_dir, tile_size=224, file_ext='tif', num_workers=args.num_workers)

@@ -2,8 +2,15 @@ from util.datasets import SatelliteDataset
 
 
 class QFabricDataset(SatelliteDataset):
-    CHANGE_TYPES = ['No Change', 'Residential', 'Commercial', 'Industrial',
-                    'Road', 'Demolition', 'Mega Projects']
+    CHANGE_TYPES = [
+        "No Change",
+        "Residential",
+        "Commercial",
+        "Industrial",
+        "Road",
+        "Demolition",
+        "Mega Projects",
+    ]
     CHANGE_STATUS = ['No Change', 'Prior Construction', 'Greenland',
                      'Land Cleared', 'Excavation', 'Materials Dumped',
                      'Construction Started', 'Construction Midway',
