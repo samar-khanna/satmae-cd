@@ -226,7 +226,10 @@ def create_tile(array_file, out_dir, tile_size=224, file_ext='tif'):
         components.insert(-1, f't{i}')
         out_f_name = '.'.join(components).replace('.tif', '.png')
 
-        out_f_path = os.path.join(out_dir, out_f_name)
+        tile_dir = os.path.join(out_dir, str(components[0]))
+        os.makedirs(tile_dir, exist_ok=True)
+
+        out_f_path = os.path.join(tile_dir, out_f_name)
 
         if len(tile.shape) == 3:
             tile = tile.transpose((1, 2, 0))  # (h, w, 3)
