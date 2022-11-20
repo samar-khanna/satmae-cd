@@ -4,6 +4,7 @@ import ast
 import json
 import rasterio
 import numpy as np
+import pandas as pd
 from glob import glob
 from tqdm import tqdm
 
@@ -235,11 +236,11 @@ def create_tile(array_file, out_dir, tile_size=224, file_ext='tif'):
         out_f_name = '.'.join(tile_components).replace('.tif', '.png')
         out_f_path = os.path.join(tile_dir, out_f_name)
 
-        if len(tile.shape) == 3:
+        if c == 3:
             tile = tile.transpose((1, 2, 0))  # (h, w, 3)
         else:
             tile = np.squeeze(tile, axis=0)  # (h, w)
-        im = Image.fromarray(tile, mode='RGB' if len(tile.shape) == 3 else 'L')
+        im = Image.fromarray(tile, mode='RGB' if c == 3 else 'L')
         im.save(out_f_path)
 
 
@@ -259,6 +260,84 @@ def create_tiles(array_dir, tile_size=224, file_ext='tif', num_workers=8):
             exception = future.exception()
             if exception is not None:
                 raise exception
+
+
+def create_split_csv(split_file_ids, coco_json_files,
+                     tile_raster_dir, tile_change_type_dir, tile_change_status_dir=None,
+                     tile_size=224):
+    data = {'image-id': [],
+            'image:01': [], 'date:01': [], 'image-name:01': [],
+            'image:02': [], 'date:02': [], 'image-name:02': [],
+            'image:03': [], 'date:03': [], 'image-name:03': [],
+            'image:04': [], 'date:04': [], 'image-name:04': [],
+            'image:05': [], 'date:05': [], 'image-name:05': [],
+            'change-type': [], 'change-type-name': [],
+            'num-tiles': [],}
+    for f_name in split_file_ids:
+        f_path = coco_json_files[f_name]
+
+        with open(f_path, 'r') as f:
+            coco = json.load(f)
+
+        data['image-id'].append(coco['info']['id'])
+
+        images_info = coco['images']
+        assert len(images_info) == 5
+
+        for i in range(1, 6):
+            im_info = images_info[i-1]
+            f_name = im_info['name']
+            components = f_name.split('.')
+            assert len(components) == 3, f"{components} not in loc.dx.datetime format"
+            tile_dir_path = os.path.join(tile_raster_dir, *components)
+            data[f'image:0{i}'].append(os.path.abspath(tile_dir_path))
+            data[f'image-name:0{i}'].append(f_name)
+
+            date = im_info['date']
+            data[f'date:0{i}'].append(date)
+
+        loc = images_info[0]['name'].split('.')[0]
+        change_type_dir = os.path.join(tile_change_type_dir, loc)
+        data['change-type'].append(os.path.abspath(change_type_dir))
+
+        h, w = images_info[0]['height'], images_info[0]['width']
+        h_t, w_t = h // tile_size, w // tile_size
+        data['num-tiles'].append(h_t * w_t)
+
+    df = pd.DataFrame(data=data)
+    return df
+
+
+def create_dataset_csv(coco_json_dir, tile_raster_dir, tile_change_type_dir, tile_change_status_dir=None,
+                       tile_size=224):
+    json_files = glob(os.path.join(coco_json_dir, '*.json'))
+    metadata_file = [f for f in json_files if f.endswith('metadata.json')][0]
+    json_files = [f for f in json_files if not f.endswith('metadata.json')]
+
+    def f_name(f):
+        return os.path.split(f)[-1]
+
+    json_files = {f_name(f): f for f in json_files}
+
+    with open(metadata_file, 'r') as f:
+        metadata = json.load(f)
+
+    parent_dir = os.path.dirname(os.path.relpath(coco_json_dir))
+
+    train_file_ids = metadata['dataset']['train']
+    train_df = create_split_csv(
+        train_file_ids, json_files, tile_raster_dir, tile_change_type_dir, tile_change_status_dir,
+        tile_size=tile_size,
+    )
+    train_df.to_csv(os.path.join(parent_dir, 'train.csv'))
+
+
+    val_file_ids = metadata['dataset']['val']
+    val_df = create_split_csv(
+        val_file_ids, json_files, tile_raster_dir, tile_change_type_dir, tile_change_status_dir,
+        tile_size=tile_size,
+    )
+    val_df.to_csv(os.path.join(parent_dir, 'val.csv'))
 
 
 def f_name_sort_key(f_name):
@@ -290,11 +369,11 @@ if __name__ == "__main__":
         print('Tiling rasters to smaller arrays')
         create_tiles(args.raster_dir, tile_size=224, file_ext='tif', num_workers=args.num_workers)
         print('Tiling change type masks to smaller arrays')
-        create_tiles(args.masks_dir, tile_size=224, file_ext='png', num_workers=args.num_workers)
+        create_tiles(args.mask_dir, tile_size=224, file_ext='png', num_workers=args.num_workers)
         pass
     elif args.do == 'csv':
         print('Creating train-val-test csv files')
-
+        create_dataset_csv(args.coco_dir, args.raster_dir, args.mask_dir)
         pass
     else:
         raise NotImplementedError
