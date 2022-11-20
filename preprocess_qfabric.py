@@ -293,12 +293,13 @@ def create_split_csv(split_file_ids, coco_json_files,
             data[f'image:0{i}'].append(os.path.abspath(tile_dir_path))
             data[f'image-name:0{i}'].append(f_name)
 
-            date = im_info['date']
+            date = im_info['date_captured']
             data[f'date:0{i}'].append(date)
 
         loc = images_info[0]['name'].split('.')[0]
         change_type_dir = os.path.join(tile_change_type_dir, loc)
         data['change-type'].append(os.path.abspath(change_type_dir))
+        data['change-type-name'].append(f"{loc}.png")
 
         h, w = images_info[0]['height'], images_info[0]['width']
         h_t, w_t = h // tile_size, w // tile_size
