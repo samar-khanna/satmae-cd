@@ -36,9 +36,10 @@ class QFabricDataset(SatelliteDataset):
     mean = [0.4182007312774658, 0.4214799106121063, 0.3991275727748871]
     std = [0.28774282336235046, 0.27541765570640564, 0.2764017581939697]
 
-    def __init__(self, csv_path, t_len=2):
+    def __init__(self, csv_path, is_train=True, t_len=2):
         super(QFabricDataset, self).__init__(in_c=3)
         self.t_len = t_len
+        self.is_train = is_train
 
         self.df = pd.read_csv(csv_path)
         self.num_locs = len(self.df)
@@ -80,18 +81,19 @@ class QFabricDataset(SatelliteDataset):
         mask = (to_tensor(mask) * 255).type(torch.long)
 
         # Random crop
-        i, j, h, w = transforms.RandomCrop.get_params(
-            mask, output_size=(224, 224))
-        tensors = [TF.crop(t, i, j, h, w) for t in tensors]
-        mask = TF.crop(mask, i, j, h, w)
+        if self.is_train:
+            i, j, h, w = transforms.RandomCrop.get_params(
+                mask, output_size=(224, 224))
+            tensors = [TF.crop(t, i, j, h, w) for t in tensors]
+            mask = TF.crop(mask, i, j, h, w)
 
         # Random horizontal flipping
-        if random.random() > 0.5:
+        if self.is_train and random.random() > 0.5:
             tensors = [TF.hflip(t) for t in tensors]
             mask = TF.hflip(mask)
 
         # Random vertical flipping
-        if random.random() > 0.5:
+        if self.is_train and random.random() > 0.5:
             tensors = [TF.vflip(t) for t in tensors]
             mask = TF.vflip(mask)
 
