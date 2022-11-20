@@ -77,7 +77,7 @@ class QFabricDataset(SatelliteDataset):
     def common_transform(self, images, mask):
         to_tensor = transforms.ToTensor()
         tensors = [to_tensor(img) for img in images]
-        mask = to_tensor(mask).dtype(torch.long)
+        mask = (to_tensor(mask) * 255).type(torch.long)
 
         # Random crop
         i, j, h, w = transforms.RandomCrop.get_params(
@@ -115,11 +115,7 @@ class QFabricDataset(SatelliteDataset):
 
         im_paths = []
         for path, name in zip(im_dirs, im_names):
-            components = name.split('.')
-            components.insert(f't{tile_idx}', -1)
-            name = '.'.join(components)
-
-            im_path = os.path.join(path, name)
+            im_path = os.path.join(path, name + f'.t{tile_idx}.png')
             im_paths.append(im_path)
 
         change_type_dir = self.change_type_dirs[row]
@@ -136,4 +132,4 @@ class QFabricDataset(SatelliteDataset):
         dates = [torch.tensor([yr, mo, hr]) for yr, mo, hr in zip(years, months, hours)]
         dates = torch.stack(dates, dim=0)  # (t, 3)
 
-        return imgs, dates, label
+        return imgs, dates, label  # (1, h, w)
