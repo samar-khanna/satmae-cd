@@ -230,6 +230,7 @@ def create_tile(array_file, out_dir, tile_size=224, file_ext='tif'):
         tile_dir = os.path.join(tile_dir, '.'.join(components[1:3]))
     os.makedirs(tile_dir, exist_ok=True)
     for i, tile in enumerate(tiles):
+        components = [c for c in components]
         components.insert(-1, f't{i}')
         out_f_name = '.'.join(components).replace('.tif', '.png')
         out_f_path = os.path.join(tile_dir, out_f_name)
