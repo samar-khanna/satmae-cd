@@ -289,7 +289,7 @@ def create_split_csv(split_file_ids, coco_json_files,
             f_name = im_info['name']
             components = f_name.split('.')
             assert len(components) == 3, f"{components} not in loc.dx.datetime format"
-            loc = f_name[0]
+            loc = components[0]
             date_str = '.'.join(components[1:])
 
             tile_dir_path = os.path.join(tile_raster_dir, loc, date_str)
