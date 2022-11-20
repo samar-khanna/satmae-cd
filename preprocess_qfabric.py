@@ -352,6 +352,7 @@ if __name__ == "__main__":
     parser.add_argument('--data_path', default='./QFabric', type=str, help='Root dir of QFabric dataset')
     parser.add_argument('--gjson_dir', default='./QFabric/QFabric_Labels/geojsons')
     parser.add_argument('--json_dir', default='./QFabric/QFabric_Labels/jsons')
+    parser.add_argument('--cooc_dir', default='./QFabric/random-split/COCO')
     parser.add_argument('--csv', default='./random-split1_2022_11_09-18_39_08/CSV/train.csv')
     parser.add_argument('--raster_dir', default='./QFabric/rasters/')
     parser.add_argument('--mask_dir', default='./QFabric/labels/change_type_masks')
