@@ -219,7 +219,7 @@ class TemporalSegmenter(nn.Module):
     ):
         super().__init__()
         self.n_cls = n_cls
-        self.patch_size = encoder.patch_size
+        self.patch_size = encoder.patch_embed.patch_size[0]
         self.encoder = encoder
         self.decoder = decoder
 

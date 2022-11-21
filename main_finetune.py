@@ -35,7 +35,7 @@ import models_vit_temporal
 import models_vit_group_channels
 import segmenter
 
-from engine_finetune import (train_one_epoch, train_one_epoch_temporal, train_one_epoch_segmenter,
+from engine_finetune import (train_one_epoch, train_one_epoch_temporal,
                              evaluate, evaluate_temporal, evaluate_segmenter)
 
 
@@ -128,7 +128,8 @@ def get_args_parser():
                         help='Train .csv path')
     parser.add_argument('--test_path', default='/home/val_62classes.csv', type=str,
                         help='Test .csv path')
-    parser.add_argument('--dataset_type', default='rgb', choices=['rgb', 'temporal', 'sentinel', 'euro_sat', 'naip'],
+    parser.add_argument('--dataset_type', default='rgb', choices=['rgb', 'temporal', 'sentinel', 'euro_sat', 'naip',
+                                                                  'qfabric'],
                         help='Whether to use fmow rgb, sentinel, or other dataset.')
     parser.add_argument('--masked_bands', default=None, nargs='+', type=int,
                         help='Sequence of band indices to mask (with mean val) in sentinel dataset')
@@ -321,7 +322,8 @@ def main(args):
                                             n_heads=model.embed_dim//64,
                                             d_model=model.embed_dim,
                                             d_ff=4*model.embed_dim,
-                                            drop_path_rate=args.drop_path, dropout=0)
+                                            n_layers=2,
+                                            drop_path_rate=0.0, dropout=0.1)
         model = segmenter.TemporalSegmenter(model, decoder, n_cls=args.nb_classes)
 
     model.to(device)
@@ -350,6 +352,10 @@ def main(args):
     # build optimizer with layer-wise lr decay (lrd)
     if args.model_type is not None and args.model_type.startswith('resnet'):
         param_groups = model_without_ddp.parameters()
+    elif args.model_type == 'segmenter':
+        param_groups = lrd.param_groups_segmenter_lrd(model_without_ddp, args.weight_decay,
+                                                      no_weight_decay_list=model_without_ddp.no_weight_decay(),
+                                                      layer_decay=args.layer_decay)
     else:
         param_groups = lrd.param_groups_lrd(model_without_ddp, args.weight_decay,
                                             no_weight_decay_list=model_without_ddp.no_weight_decay(),

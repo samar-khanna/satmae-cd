@@ -582,7 +582,7 @@ def build_fmow_dataset(is_train: bool, args) -> SatelliteDataset:
         dataset = NAIP_train_dataset if is_train else NAIP_test_dataset
         args.nb_classes = NAIP_CLASS_NUM
     elif args.dataset_type == 'qfabric':
-        from qfabric_dataset import QFabricDataset
+        from util.qfabric_dataset import QFabricDataset
         dataset = QFabricDataset(csv_path, is_train=is_train, t_len=args.time_length)
     else:
         raise ValueError(f"Invalid dataset type: {args.dataset_type}")
