@@ -229,19 +229,11 @@ def evaluate_temporal(data_loader, model, device):
     # switch to evaluation mode
     model.eval()
 
-    tta = False
-
     for batch in metric_logger.log_every(data_loader, 10, header):
         images = batch[0]
         timestamps = batch[1]
         target = batch[-1]
 
-        batch_size = images.shape[0]
-        # print(images.shape, timestamps.shape, target.shape)
-        if tta:
-            images = images.reshape(-1, 3, 3, 224, 224)
-            timestamps = timestamps.reshape(-1, 3, 3)
-            target = target.reshape(-1, 1)
         # images = images.reshape()
         # print('images and targets')
         images = images.to(device, non_blocking=True)
@@ -253,18 +245,6 @@ def evaluate_temporal(data_loader, model, device):
         with torch.cuda.amp.autocast():
             output = model(images, timestamps)
 
-            if tta:
-                # output = output.reshape(batch_size, 9, -1).mean(dim=1, keepdims=False)
-
-                output = output.reshape(batch_size, 9, -1)
-                sp = output.shape
-                maxarg = output.argmax(dim=-1)
-
-                output = F.one_hot(maxarg.reshape(-1), num_classes=1000).float()
-                output = output.reshape(sp).mean(dim=1, keepdims=False)
-                # print(output.shape)
-                
-                target = target.reshape(batch_size, 9)[:, 0]
             # print(target.shape)
             loss = criterion(output, target)
 
@@ -275,6 +255,53 @@ def evaluate_temporal(data_loader, model, device):
         metric_logger.update(loss=loss.item())
         metric_logger.meters['acc1'].update(acc1.item(), n=batch_size)
         metric_logger.meters['acc5'].update(acc5.item(), n=batch_size)
+    # gather the stats from all processes
+    metric_logger.synchronize_between_processes()
+    print('* Acc@1 {top1.global_avg:.3f} Acc@5 {top5.global_avg:.3f} loss {losses.global_avg:.3f}'
+          .format(top1=metric_logger.acc1, top5=metric_logger.acc5, losses=metric_logger.loss))
+
+    return {k: meter.global_avg for k, meter in metric_logger.meters.items()}
+
+
+def accuracy_mask(output, target, topk=(1,)):
+    """Computes the accuracy over the k top predictions for the specified values of k"""
+    maxk = max(topk)
+    _, pred = output.topk(maxk, 1, True, True)  # (b, k, h, w)
+    correct = pred.eq(target.unsqueeze(1))  # (b, k, h, w)
+    correct = correct.permute(1, 0, 2, 3).reshape(maxk, -1)  # (k, b*h*w)
+    return [correct[:k].reshape(-1).float().sum(0) * 100. / correct.shape[1] for k in topk]
+
+
+@torch.no_grad()
+def evaluate_segmenter(data_loader, model, device):
+    criterion = torch.nn.CrossEntropyLoss()
+
+    metric_logger = misc.MetricLogger(delimiter="  ")
+    header = 'Test:'
+
+    # switch to evaluation mode
+    model.eval()
+
+    for batch in metric_logger.log_every(data_loader, 10, header):
+        images = batch[0]
+        timestamps = batch[1]
+        target = batch[-1]
+
+        images = images.to(device, non_blocking=True)
+        timestamps = timestamps.to(device, non_blocking=True)
+        target = target.to(device, non_blocking=True)
+
+        with torch.cuda.amp.autocast():
+            output = model(images, timestamps)
+
+            loss = criterion(output, target)
+
+        acc1, acc5 = accuracy_mask(output, target, topk=(1, 3))
+
+        batch_size = images.shape[0]
+        metric_logger.update(loss=loss.item())
+        metric_logger.meters['acc1'].update(acc1.item(), n=batch_size)
+        metric_logger.meters['acc3'].update(acc5.item(), n=batch_size)
     # gather the stats from all processes
     metric_logger.synchronize_between_processes()
     print('* Acc@1 {top1.global_avg:.3f} Acc@5 {top5.global_avg:.3f} loss {losses.global_avg:.3f}'

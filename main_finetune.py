@@ -33,9 +33,10 @@ import models_resnet
 import models_vit
 import models_vit_temporal
 import models_vit_group_channels
+import segmenter
 
-from engine_finetune import (train_one_epoch, train_one_epoch_temporal,
-                             evaluate, evaluate_temporal)
+from engine_finetune import (train_one_epoch, train_one_epoch_temporal, train_one_epoch_segmenter,
+                             evaluate, evaluate_temporal, evaluate_segmenter)
 
 
 def get_args_parser():
@@ -48,7 +49,7 @@ def get_args_parser():
 
     # Model parameters
     parser.add_argument('--model_type', default=None, choices=['group_c', 'resnet', 'resnet_pre',
-                                                               'temporal', 'vanilla'],
+                                                               'temporal', 'vanilla', 'segmenter'],
                         help='Use channel model')
     parser.add_argument('--model', default='vit_large_patch16', type=str, metavar='MODEL',
                         help='Name of model to train')
@@ -135,6 +136,7 @@ def get_args_parser():
                         help="Which bands (0 indexed) to drop from sentinel data.")
     parser.add_argument('--grouped_bands', type=int, nargs='+', action='append',
                         default=[], help="Bands to group for GroupC vit")
+    parser.add_argument('--time_length', type=int, default=2, help='Number of imgs in time series for change det.')
 
     parser.add_argument('--nb_classes', default=62, type=int,
                         help='number of the classification types')
@@ -192,6 +194,7 @@ def main(args):
 
     dataset_train = build_fmow_dataset(is_train=True, args=args)
     dataset_val = build_fmow_dataset(is_train=False, args=args)
+    args.nb_classes = dataset_train.num_classes
 
     if True:  # args.distributed:
         num_tasks = misc.get_world_size()
@@ -259,7 +262,7 @@ def main(args):
     elif args.model_type == 'resnet' or args.model_type == 'resnet_pre':
         pre_trained = args.model_type == 'resnet_pre'
         model = models_resnet.__dict__[args.model](in_c=dataset_train.in_c, pretrained=pre_trained)
-    elif args.model_type == 'temporal':
+    elif args.model_type == 'temporal' or args.model_type == 'segmenter':
         model = models_vit_temporal.__dict__[args.model](
             num_classes=args.nb_classes,
             drop_path_rate=args.drop_path,
@@ -309,6 +312,18 @@ def main(args):
         # manually initialize fc layer
         trunc_normal_(model.head.weight, std=2e-5)
 
+    ## Create segmenter
+    if args.model_type == 'segmenter':
+        patch_size = model.patch_embed.patch_size[0]
+        decoder = segmenter.MaskTransformer(n_cls=args.nb_classes,
+                                            patch_size=patch_size,
+                                            d_encoder=model.embed_dim,
+                                            n_heads=model.embed_dim//64,
+                                            d_model=model.embed_dim,
+                                            d_ff=4*model.embed_dim,
+                                            drop_path_rate=args.drop_path, dropout=0)
+        model = segmenter.TemporalSegmenter(model, decoder, n_cls=args.nb_classes)
+
     model.to(device)
 
     model_without_ddp = model
@@ -350,6 +365,9 @@ def main(args):
     else:
         criterion = torch.nn.CrossEntropyLoss()
 
+    if args.model_type == 'segmenter':
+        criterion = segmenter.IoUBCE(args.nb_classes)
+
     print("criterion = %s" % str(criterion))
 
     misc.load_model(args=args, model_without_ddp=model_without_ddp, optimizer=optimizer, loss_scaler=loss_scaler)
@@ -376,7 +394,7 @@ def main(args):
         if args.distributed:
             data_loader_train.sampler.set_epoch(epoch)
 
-        if args.model_type == 'temporal':
+        if args.model_type == 'temporal' or args.model_type == 'segmenter':
             train_stats = train_one_epoch_temporal(
                 model, criterion, data_loader_train,
                 optimizer, device, epoch, loss_scaler,
@@ -400,6 +418,8 @@ def main(args):
 
         if args.model_type == 'temporal':
             test_stats = evaluate_temporal(data_loader_val, model, device)
+        elif args.model_type == 'segmenter':
+            test_stats = evaluate_segmenter(data_loader_val, model, device)
         else:
             test_stats = evaluate(data_loader_val, model, device)
 
