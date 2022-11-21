@@ -40,6 +40,7 @@ class QFabricDataset(SatelliteDataset):
         super(QFabricDataset, self).__init__(in_c=3)
         self.t_len = t_len
         self.is_train = is_train
+        self.num_classes = len(self.CHANGE_TYPES)
 
         self.df = pd.read_csv(csv_path)
         self.num_locs = len(self.df)
@@ -134,4 +135,4 @@ class QFabricDataset(SatelliteDataset):
         dates = [torch.tensor([yr, mo, hr]) for yr, mo, hr in zip(years, months, hours)]
         dates = torch.stack(dates, dim=0)  # (t, 3)
 
-        return imgs, dates, label  # (1, h, w)
+        return imgs, dates, label.squeeze(0)  # (h, w)
