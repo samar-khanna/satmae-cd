@@ -23,18 +23,29 @@ class VisionTransformer(timm.models.vision_transformer.VisionTransformer):
 
         self.pos_embed = nn.Parameter(torch.zeros(1, self.patch_embed.num_patches + 1, kwargs['embed_dim'] - 384))
 
-        self.global_pool = global_pool
-        if self.global_pool:
-            norm_layer = kwargs['norm_layer']
-            embed_dim = kwargs['embed_dim']
-            self.fc_norm = norm_layer(embed_dim)
+        # self.global_pool = global_pool
+        # if self.global_pool:
+        #     norm_layer = kwargs['norm_layer']
+        #     embed_dim = kwargs['embed_dim']
+        #     self.fc_norm = norm_layer(embed_dim)
+        #
+        #     del self.norm  # remove the original norm
+        del self.head
 
-            del self.norm  # remove the original norm
-
-    def forward(self, x, timestamps):
+    def forward(self, x, timestamps, return_features=False):
         x = self.forward_features(x, timestamps)
-        x = self.head(x)
-        return x
+        if return_features:
+            return x
+
+        if self.global_pool:
+            x = x[:, 1:, :].mean(dim=1)  # global pool without cls token
+            outcome = self.fc_norm(x)
+        else:
+            x = self.norm(x)
+            outcome = x[:, 0]
+
+        outcome = self.head(outcome)
+        return outcome
 
     def forward_features(self, x, timestamps):
         
@@ -61,14 +72,9 @@ class VisionTransformer(timm.models.vision_transformer.VisionTransformer):
         for blk in self.blocks:
             x = blk(x)
 
-        if self.global_pool:
-            x = x[:, 1:, :].mean(dim=1)  # global pool without cls token
-            outcome = self.fc_norm(x)
-        else:
-            x = self.norm(x)
-            outcome = x[:, 0]
+        x = self.norm(x)
 
-        return outcome
+        return x
 
 
 def vit_base_patch16(**kwargs):
