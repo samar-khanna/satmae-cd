@@ -102,6 +102,8 @@ class QFabricDataset(SatelliteDataset):
 
     def __getitem__(self, index):
         row, tile_idx = self.get_loc_tile(index)
+        assert tile_idx < self.num_tiles[row], \
+            f'{index} for loc {row} not factored properly. Tile index {tile_idx}, limit: {self.num_tiles[row]}'
 
         if self.t_len == 2:
             im_dirs = [self.image_dirs[row][0], self.image_dirs[row][-1]]
