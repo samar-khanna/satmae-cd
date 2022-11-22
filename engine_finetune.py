@@ -341,8 +341,8 @@ def evaluate_segmenter(data_loader, model, device):
 
         cm, num_pix = confusion_matrix(output, target)
         n_cls = cm.shape[0]
-        for i in range(len(cm.shape[0])):
-            for j in range(len(cm.shape[1])):
+        for i in range(cm.shape[0]):
+            for j in range(cm.shape[1]):
                 metric_logger.meters[f'cm_{i}{j}'].update(cm[i, j].item(), n=num_pix)
 
     # gather the stats from all processes
@@ -351,8 +351,8 @@ def evaluate_segmenter(data_loader, model, device):
           .format(top1=metric_logger.acc1, top5=metric_logger.acc5, losses=metric_logger.loss))
 
     cm = torch.zeros(n_cls, n_cls)
-    for i in range(len(cm.shape[0])):
-        for j in range(len(cm.shape[1])):
+    for i in range(cm.shape[0]):
+        for j in range(cm.shape[1]):
             cm[i, j] = metric_logger.metrics[f'cm_{i}{j}'].global_avg
 
     oa, miou, sek = compute_cm_metrics(cm)
