@@ -272,6 +272,41 @@ def accuracy_mask(output, target, topk=(1,)):
     return [correct[:k].reshape(-1).float().sum(0) * 100. / correct.shape[1] for k in topk]
 
 
+def confusion_matrix(output, target):
+    n_cls = output.shape[1]
+    cm = torch.zeros(n_cls, n_cls, device=output.device)
+    pred = output.argmax(dim=1).reshape(-1)  # (bhw)
+    target = target.reshape(-1)  # (bhw)
+
+    # beautiful index_put_
+    cm.index_put_((pred, target), torch.ones_like(pred).float(), accumulate=True)
+
+    # cm_{ij} is pred class i but true class j
+    return cm, target.numel()
+
+
+def compute_cm_metrics(cm):
+    # assume class 0 is no change
+    # https://arxiv.org/pdf/2010.05687.pdf
+    oa = cm.diag().sum()/cm.sum()
+
+    iou1 = cm[0, 0]/(cm[:, 0].sum() + cm[0, :].sum() - cm[0, 0])
+    iou2 = cm[1:, 1:].sum()/(cm.sum() - cm[0, 0])
+    miou = 0.5 * (iou1 + iou2)
+
+    rho = cm[1:, 1:].diag().sum() / (cm.sum() - cm[0, 0])
+
+    row_sum = cm.sum(dim=1)
+    row_sum[0] -= cm[0, 0]
+    col_sum = cm.sum(dim=0)
+    col_sum[0] -= cm[0, 0]
+    eta = (row_sum * col_sum).sum() / (cm.sum() - cm[0, 0])**2
+
+    sek = (iou2-1).exp() * (rho - eta) / (1 - eta)
+
+    return oa, miou, sek
+
+
 @torch.no_grad()
 def evaluate_segmenter(data_loader, model, device):
     criterion = torch.nn.CrossEntropyLoss()
@@ -282,6 +317,7 @@ def evaluate_segmenter(data_loader, model, device):
     # switch to evaluation mode
     model.eval()
 
+    n_cls = -1
     for batch in metric_logger.log_every(data_loader, 10, header):
         images = batch[0]
         timestamps = batch[1]
@@ -302,9 +338,25 @@ def evaluate_segmenter(data_loader, model, device):
         metric_logger.update(loss=loss.item())
         metric_logger.meters['acc1'].update(acc1.item(), n=batch_size)
         metric_logger.meters['acc5'].update(acc5.item(), n=batch_size)
+
+        cm, num_pix = confusion_matrix(output, target)
+        n_cls = cm.shape[0]
+        for i in range(len(cm.shape[0])):
+            for j in range(len(cm.shape[1])):
+                metric_logger.meters[f'cm_{i}{j}'].update(cm[i, j].item(), n=num_pix)
+
     # gather the stats from all processes
     metric_logger.synchronize_between_processes()
     print('* Acc@1 {top1.global_avg:.3f} Acc@5 {top5.global_avg:.3f} loss {losses.global_avg:.3f}'
           .format(top1=metric_logger.acc1, top5=metric_logger.acc5, losses=metric_logger.loss))
+
+    cm = torch.zeros(n_cls, n_cls)
+    for i in range(len(cm.shape[0])):
+        for j in range(len(cm.shape[1])):
+            cm[i, j] = metric_logger.metrics[f'cm_{i}{j}'].global_avg
+
+    oa, miou, sek = compute_cm_metrics(cm)
+    print('* OA {oa:.3f} MIoU {miou:.3f} SeK {sek:.3f}'
+          .format(oa=oa, miou=miou, sek=sek))
 
     return {k: meter.global_avg for k, meter in metric_logger.meters.items()}
