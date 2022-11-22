@@ -104,7 +104,7 @@ def merge_coco_with_jsons(coco_dir, json_dir):
         loc = int(im_name.split('.')[0])
         loc_to_coco[loc] = c_file
 
-    for i, j_file in json_files:
+    for i, j_file in tqdm(enumerate(json_files), total=len(json_files)):
         c_file = loc_to_coco[i]
 
         with open(j_file, 'r') as f:
@@ -384,7 +384,7 @@ def f_name_sort_key(f_name):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Run preprocessing for QFabric')
-    parser.add_argument('--do', choices=['jsons', 'change_type_masks', 'csv', 'tile'], type=str, default='jsons',
+    parser.add_argument('--do', choices=['jsons', 'coco', 'change_type_masks', 'csv', 'tile'], type=str, default='jsons',
                         help='Which functionality to perform')
     parser.add_argument('--data_path', default='./QFabric', type=str, help='Root dir of QFabric dataset')
     parser.add_argument('--gjson_dir', default='./QFabric/QFabric_Labels/geojsons')
