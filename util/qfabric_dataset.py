@@ -73,7 +73,7 @@ class QFabricDataset(SatelliteDataset):
         mask = index < self.cum_tiles
         valid_rows, = np.nonzero(mask)
         row = valid_rows[0]
-        tile = index - row * self.num_tiles[row]
+        tile = index - (self.cum_tiles[row-1] if row-1 >= 0 else 0)
         return row, tile
 
     def common_transform(self, images, mask):

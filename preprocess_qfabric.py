@@ -418,7 +418,7 @@ if __name__ == "__main__":
         pass
     elif args.do == 'csv':
         print('Creating train-val-test csv files')
-        create_dataset_csv(args.coco_dir, args.raster_dir, args.mask_dir)
+        create_dataset_csv(args.coco_dir, args.raster_dir, args.mask_dir, tile_size=args.tile_size)
         pass
     else:
         raise NotImplementedError
