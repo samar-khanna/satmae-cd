@@ -393,7 +393,7 @@ if __name__ == "__main__":
     parser.add_argument('--csv', default='./random-split1_2022_11_09-18_39_08/CSV/train.csv')
     parser.add_argument('--raster_dir', default='./QFabric/rasters/')
     parser.add_argument('--mask_dir', default='./QFabric/labels/change_type_masks')
-    parser.add_argument('--tile_size', default=300, type=int)
+    parser.add_argument('--tile_size', default=256, type=int)
     parser.add_argument('--num_workers', default=8, type=int)
 
     args = parser.parse_args()

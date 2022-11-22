@@ -87,6 +87,10 @@ class QFabricDataset(SatelliteDataset):
                 mask, output_size=(224, 224))
             tensors = [TF.crop(t, i, j, h, w) for t in tensors]
             mask = TF.crop(mask, i, j, h, w)
+        else:
+            crop = transforms.CenterCrop(size=(224, 224))
+            tensors = [crop(t) for t in tensors]
+            mask = crop(mask)
 
         # Random horizontal flipping
         if self.is_train and random.random() > 0.5:
