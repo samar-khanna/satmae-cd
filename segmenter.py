@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from einops import rearrange
-from torchmetrics import JaccardIndex
+from torchmetrics.functional import jaccard_index
 
 from timm.models.layers import DropPath
 from timm.models.layers import trunc_normal_
@@ -269,13 +269,12 @@ class IoUBCE(nn.Module):
         self.n_cls = n_cls
         self.a = alpha
 
-        self.iou_loss = JaccardIndex(n_cls, threshold=0.5)
-
     def forward(self, pred, target):
+        target = target.type(torch.long)
         bce_target = F.one_hot(target, self.n_cls).permute(0, 3, 1, 2)  # (b, n_cls, h, w)
-        bce = F.binary_cross_entropy_with_logits(pred, bce_target)
+        bce = F.binary_cross_entropy_with_logits(pred, bce_target.float())
 
         prob = F.softmax(pred, dim=1)  # (b, n_cls, h, w)
-        iou = self.iou_loss(prob, target)
+        iou = jaccard_index(prob, target, self.n_cls, threshold=0.5)
 
         return self.a * bce + (1 - self.a) * iou
