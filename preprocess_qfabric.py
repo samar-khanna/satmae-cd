@@ -86,6 +86,39 @@ def annotate_jsons(gjson_path, json_path, num_workers=8):
                 json.dump(new_json, f, indent=2)
 
 
+def merge_coco_with_jsons(coco_dir, json_dir):
+    out_dir = os.path.dirname(os.path.relpath(coco_dir))
+    out_dir = os.path.join(out_dir, 'new_coco')
+
+    json_files = glob(os.path.join(json_dir, '*.json'))
+    json_files = sorted(json_files, key=f_name_sort_key)
+
+    coco_files = glob(os.path.join(coco_dir, '*.json'))
+    coco_files = [f for f in coco_files if not f.endswith('metadata.json')]
+    loc_to_coco = {}
+    for c_file in coco_files:
+        with open(c_file, 'r') as f:
+            coco = json.load(f)
+
+        im_name = coco['images'][0]['name']
+        loc = int(im_name.split('.')[0])
+        loc_to_coco[loc] = c_file
+
+    for i, j_file in json_files:
+        c_file = loc_to_coco[i]
+
+        with open(j_file, 'r') as f:
+            j_data = json.load(f)
+
+        with open(c_file, 'r') as f:
+            c_data = json.load(f)
+
+        c_data['shapes'] = j_data['shapes']
+
+        with open(os.path.join(out_dir, f'{i}.json')) as f:
+            json.dump(c_data, f, indent=2)
+
+
 def gen_grid_points(x_min, x_max, y_min, y_max):
     # make a canvas with pixel coordinates
     x, y = np.meshgrid(np.arange(x_min, x_max), np.arange(y_min, y_max))
@@ -117,9 +150,9 @@ def create_change_type_mask(json_file, change_types):
 
     h, w = HEIGHT, WIDTH
 
-    # # based on coco jsons
-    # raster_info = labels['images'][0]
-    # h, w = raster_info['height'], raster_info['width']
+    # based on coco jsons
+    raster_info = labels['images'][0]
+    h, w = raster_info['height'], raster_info['width']
 
     # # based on old jsons
     # raster_file = os.path.split(raster_info['file_name'])[-1]
@@ -360,6 +393,7 @@ if __name__ == "__main__":
     parser.add_argument('--csv', default='./random-split1_2022_11_09-18_39_08/CSV/train.csv')
     parser.add_argument('--raster_dir', default='./QFabric/rasters/')
     parser.add_argument('--mask_dir', default='./QFabric/labels/change_type_masks')
+    parser.add_argument('--tile_size', default=300, type=int)
     parser.add_argument('--num_workers', default=8, type=int)
 
     args = parser.parse_args()
@@ -367,14 +401,17 @@ if __name__ == "__main__":
     if args.do == 'jsons':
         print('Annotating jsons with geojson data.')
         annotate_jsons(args.gjson_dir, args.json_dir, args.num_workers)
+    elif args.do == 'coco':
+        print('Adding correct shapes info to coco files')
+        merge_coco_with_jsons(args.coco_dir, args.json_dir)
     elif args.do == 'change_type_masks':
         print('Creating change type masks for each location (1 per location)')
         create_change_type_masks(args.json_dir, QFabricDataset.CHANGE_TYPES, args.num_workers)
     elif args.do == 'tile':
         print('Tiling rasters to smaller arrays')
-        create_tiles(args.raster_dir, tile_size=224, file_ext='tif', num_workers=args.num_workers)
+        create_tiles(args.raster_dir, tile_size=args.tile_size, file_ext='tif', num_workers=args.num_workers)
         print('Tiling change type masks to smaller arrays')
-        create_tiles(args.mask_dir, tile_size=224, file_ext='png', num_workers=args.num_workers)
+        create_tiles(args.mask_dir, tile_size=args.tile_size, file_ext='png', num_workers=args.num_workers)
         pass
     elif args.do == 'csv':
         print('Creating train-val-test csv files')
