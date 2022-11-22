@@ -115,7 +115,7 @@ def merge_coco_with_jsons(coco_dir, json_dir):
 
         c_data['shapes'] = j_data['shapes']
 
-        with open(os.path.join(out_dir, f'{i}.json')) as f:
+        with open(os.path.join(out_dir, f'{i}.json'), 'w') as f:
             json.dump(c_data, f, indent=2)
 
 
