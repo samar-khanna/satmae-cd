@@ -387,6 +387,8 @@ def main(args):
     if args.eval:
         if args.model_type == 'temporal':
             test_stats = evaluate_temporal(data_loader_val, model, device)
+        elif args.model_type == 'segmenter':
+            test_stats = evaluate_segmenter(data_loader_val, model, device)
         else:
             test_stats = evaluate(data_loader_val, model, device)
         print(f"Evaluation on {len(dataset_val)} test images- acc1: {test_stats['acc1']:.2f}%, "
