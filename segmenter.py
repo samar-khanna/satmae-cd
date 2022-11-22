@@ -234,9 +234,9 @@ class TemporalSegmenter(nn.Module):
         return nwd_params
 
     def forward(self, im, ts):
-        H_ori, W_ori = im.size(2), im.size(3)
-        im = padding(im, self.patch_size)
-        H, W = im.size(2), im.size(3)
+        H_ori, W_ori = im.size(3), im.size(4)
+        # im = padding(im, self.patch_size)
+        H, W = im.size(3), im.size(4)
 
         x = self.encoder(im, ts, return_features=True)
 
@@ -246,7 +246,7 @@ class TemporalSegmenter(nn.Module):
         masks = self.decoder(x, (H, W))
 
         masks = F.interpolate(masks, size=(H, W), mode="bilinear")
-        masks = unpadding(masks, (H_ori, W_ori))
+        # masks = unpadding(masks, (H_ori, W_ori))
 
         return masks
 
