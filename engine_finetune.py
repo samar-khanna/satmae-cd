@@ -353,7 +353,7 @@ def evaluate_segmenter(data_loader, model, device):
     cm = torch.zeros(n_cls, n_cls)
     for i in range(cm.shape[0]):
         for j in range(cm.shape[1]):
-            cm[i, j] = metric_logger.metrics[f'cm_{i}{j}'].global_avg
+            cm[i, j] = metric_logger.meters[f'cm_{i}{j}'].global_avg
 
     oa, miou, sek = compute_cm_metrics(cm)
     print('* OA {oa:.3f} MIoU {miou:.3f} SeK {sek:.3f}'
