@@ -89,6 +89,7 @@ def annotate_jsons(gjson_path, json_path, num_workers=8):
 def merge_coco_with_jsons(coco_dir, json_dir):
     out_dir = os.path.dirname(os.path.relpath(coco_dir))
     out_dir = os.path.join(out_dir, 'new_coco')
+    os.makedirs(out_dir, exist_ok=True)
 
     json_files = glob(os.path.join(json_dir, '*.json'))
     json_files = sorted(json_files, key=f_name_sort_key)
