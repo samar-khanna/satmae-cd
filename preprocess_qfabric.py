@@ -15,6 +15,8 @@ from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_compl
 
 from util.qfabric_dataset import QFabricDataset
 
+Image.MAX_IMAGE_PIXELS = 251598688 + 2
+
 HEIGHT = 9928
 WIDTH = 9796
 
