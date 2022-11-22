@@ -58,10 +58,12 @@ class VisionTransformer(timm.models.vision_transformer.VisionTransformer):
         x = torch.cat(patches, dim=1)  # (B, T*L, D)
 
         ts = timestamps.view(-1, 3).float()  # (B*T, 3)  where 3 is for yr, mo, hr
-        ts_embed = torch.cat([get_1d_sincos_pos_embed_from_grid_torch(384//T, ts[:, i]) for i in range(3)])  # (B*T, 384)
+        ts_embed = torch.cat([get_1d_sincos_pos_embed_from_grid_torch(384//3, ts[:, i]) for i in range(3)], dim=-1)  # (B*T, 384)
         ts_embed = ts_embed.view(B, T, ts_embed.shape[-1]).unsqueeze(2)  # (B, T, 1, 384)
         ts_embed = ts_embed.expand(-1, -1, x.shape[1] // T, -1)  # (B, T, L, 384)
-        ts_embed = ts_embed.view(B, -1, ts_embed.shape[-1])  # (B, T*L, 384)
+        ts_embed = ts_embed.reshape(B, -1, ts_embed.shape[-1])  # (B, T*L, 384)
+        ts_embed = torch.cat((torch.zeros(B, 1, ts_embed.shape[-1], device=ts_embed.device), ts_embed), dim=1)  # (B, T*L + 1, 384)
+        ts_embed = ts_embed.float()
 
         pos_embed = torch.cat((self.pos_embed[:, :1, :], self.pos_embed[:, 1:, :].repeat(1, T, 1)), dim=1)  # (1, T*L + 1, D-384)
         total_embed = torch.cat((pos_embed.expand(B, -1, -1), ts_embed), dim=-1)  # (B, T*L + 1, D)
