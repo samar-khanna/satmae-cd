@@ -288,7 +288,7 @@ def confusion_matrix(output, target):
 def compute_cm_metrics(cm):
     # assume class 0 is no change
     # https://arxiv.org/pdf/2010.05687.pdf
-    oa = cm.diag().sum()/cm.sum()
+    oa = cm[1:, 1:].diag().sum()/cm[1:, 1:].sum()  # acc only on change classes
 
     iou1 = cm[0, 0]/(cm[:, 0].sum() + cm[0, :].sum() - cm[0, 0])
     iou2 = cm[1:, 1:].sum()/(cm.sum() - cm[0, 0])
@@ -358,6 +358,7 @@ def evaluate_segmenter(data_loader, model, device):
     oa, miou, sek = compute_cm_metrics(cm)
     print('* OA {oa:.3f} MIoU {miou:.3f} SeK {sek:.3f}'
           .format(oa=100 * oa.item(), miou=100. * miou.item(), sek=100. * sek.item()))
+    metric_logger.meters['OA'].update(100. * oa.item())
     metric_logger.meters['mIoU'].update(100. * miou.item())
     metric_logger.meters['SeK'].update(100. * sek.item())
 
