@@ -294,15 +294,15 @@ def compute_cm_metrics(cm):
     iou2 = cm[1:, 1:].sum()/(cm.sum() - cm[0, 0])
     miou = 0.5 * (iou1 + iou2)
 
-    rho = cm[1:, 1:].diag().sum() / (cm.sum() - cm[0, 0])
+    cm_copy = cm.clone()
+    cm_copy[0, 0] = 0.
+    rho = cm_copy.diag().sum() / cm_copy.sum()
 
-    row_sum = cm.sum(dim=1)
-    row_sum[0] -= cm[0, 0]
-    col_sum = cm.sum(dim=0)
-    col_sum[0] -= cm[0, 0]
-    eta = (row_sum * col_sum).sum() / (cm.sum() - cm[0, 0])**2
+    row_sum = cm_copy.sum(dim=1)
+    col_sum = cm_copy.sum(dim=0)
+    eta = row_sum.dot(col_sum) / cm_copy.sum().pow(2)
 
-    sek = (iou2-1).exp() * (rho - eta) / (1 - eta)
+    sek = (iou2-1).exp() * (rho - eta) / (1 - eta) if eta != 1.0 else 0.
 
     return oa, miou, sek
 
