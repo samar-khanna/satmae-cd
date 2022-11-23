@@ -272,9 +272,10 @@ class IoUBCE(nn.Module):
     def forward(self, pred, target):
         target = target.type(torch.long)
         bce_target = F.one_hot(target, self.n_cls).permute(0, 3, 1, 2)  # (b, n_cls, h, w)
+        assert pred.shape == bce_target.shape
 
-        pos_weight = torch.ones(self.n_cls, device=pred.device) * 100.
-        pos_weight[0] = 1.  # downweight change class
+        pos_weight = torch.ones((1, self.n_cls, 1, 1), device=pred.device) * 100.
+        pos_weight[:, 0, ...] = 1.  # downweight change class
         bce = F.binary_cross_entropy_with_logits(pred, bce_target.float(), pos_weight=pos_weight)
 
         prob = F.softmax(pred, dim=1)  # (b, n_cls, h, w)
