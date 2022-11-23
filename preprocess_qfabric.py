@@ -187,7 +187,8 @@ def create_change_type_mask(json_file, change_types):
 
         label_mask[y_min:y_max, x_min:x_max] = fill_values.reshape(f_h, f_w)
 
-    return label_mask
+    # flip coz the images are flipped
+    return np.flipud(label_mask)
 
 
 def create_change_type_masks(json_dir, change_types, num_workers=8):
