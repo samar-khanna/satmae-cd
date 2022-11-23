@@ -357,6 +357,8 @@ def evaluate_segmenter(data_loader, model, device):
 
     oa, miou, sek = compute_cm_metrics(cm)
     print('* OA {oa:.3f} MIoU {miou:.3f} SeK {sek:.3f}'
-          .format(oa=oa, miou=miou, sek=sek))
+          .format(oa=100 * oa, miou=100. * miou, sek=100. * sek))
+    metric_logger.meters['mIoU'].update(100. * miou)
+    metric_logger.meters['SeK'].update(100. * sek)
 
-    return {k: meter.global_avg for k, meter in metric_logger.meters.items()}
+    return {k: meter.global_avg for k, meter in metric_logger.meters.items() if not k.startswith('cm')}
