@@ -81,8 +81,11 @@ def get_args_parser():
     parser.add_argument('--warmup_epochs', type=int, default=5, metavar='N',
                         help='epochs to warmup LR')
 
+    # Loss params
     parser.add_argument('--bce_alpha', type=float, default=0.25,
-                        help='WEight on bce vs IoU loss for segmenter.')
+                        help='Weight on bce vs IoU loss for segmenter.')
+    parser.add_argument('--use_ce', default=False, action='store_true',
+                        help='Use Cross entropy vs BCE for loss')
 
     # Augmentation parameters
     parser.add_argument('--color_jitter', type=float, default=None, metavar='PCT',
@@ -375,7 +378,7 @@ def main(args):
         criterion = torch.nn.CrossEntropyLoss()
 
     if args.model_type == 'segmenter':
-        criterion = segmenter.IoUBCE(args.nb_classes)
+        criterion = segmenter.IoUBCE(args.nb_classes, alpha=args.bce_alpha, use_ce=args.use_ce)
 
     print("criterion = %s" % str(criterion))
 

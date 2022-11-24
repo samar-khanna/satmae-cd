@@ -264,12 +264,13 @@ class TemporalSegmenter(nn.Module):
 
 
 class IoUBCE(nn.Module):
-    def __init__(self, n_cls, alpha=0.25, eps=1e-7, log_loss=True):
+    def __init__(self, n_cls, use_ce=False, alpha=0.25, eps=1e-7, log_loss=True):
         super().__init__()
         self.n_cls = n_cls
         self.a = alpha
         self.eps = eps
         self.log_loss = log_loss
+        self.use_ce = use_ce
 
     @staticmethod
     def soft_jaccard_score(
@@ -307,9 +308,13 @@ class IoUBCE(nn.Module):
         y_one_hot = F.one_hot(target, self.n_cls).permute(0, 3, 1, 2)  # (b, n_cls, h, w)
         assert pred.shape == y_one_hot.shape
 
-        # pos_weight = torch.ones((1, self.n_cls, 1, 1), device=pred.device) * 100.
-        # pos_weight[:, 0, ...] = 1.  # downweight change class
-        bce = F.binary_cross_entropy_with_logits(pred, y_one_hot.float(),)  # pos_weight=pos_weight)
+        if not self.use_ce:
+            # pos_weight = torch.ones((1, self.n_cls, 1, 1), device=pred.device) * 100.
+            # pos_weight[:, 0, ...] = 1.  # downweight change class
+            bce = F.binary_cross_entropy_with_logits(pred, y_one_hot.float(),)  # pos_weight=pos_weight)
+        else:
+            weight = torch.tensor([1., 5.18e1, 3.16e1, 1.46e3, 7.92e1, 1.61e2, 2.61e3], device=pred.device)
+            bce = F.cross_entropy(pred, target, weight=weight)
 
         b, n_cls, h, w = pred.shape
         prob = F.softmax(pred, dim=1)  # (b, n_cls, h, w)
