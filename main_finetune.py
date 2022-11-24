@@ -81,6 +81,9 @@ def get_args_parser():
     parser.add_argument('--warmup_epochs', type=int, default=5, metavar='N',
                         help='epochs to warmup LR')
 
+    parser.add_argument('--bce_alpha', type=float, default=0.25,
+                        help='WEight on bce vs IoU loss for segmenter.')
+
     # Augmentation parameters
     parser.add_argument('--color_jitter', type=float, default=None, metavar='PCT',
                         help='Color jitter factor (enabled only when not using Auto/RandAug)')

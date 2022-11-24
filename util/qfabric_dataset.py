@@ -109,18 +109,28 @@ class QFabricDataset(SatelliteDataset):
         assert tile_idx < self.num_tiles[row], \
             f'{index} for loc {row} not factored properly. Tile index {tile_idx}, limit: {self.num_tiles[row]}'
 
+        im_dirs = list(self.image_dirs[row])
+        im_names = list(self.image_names[row])
+        years = list(self.years[row] - self.min_year)
+        months = list(self.months[row] - 1)
+        hours = list(self.hours[row])
+
         if self.t_len == 2:
-            im_dirs = [self.image_dirs[row][0], self.image_dirs[row][-1]]
-            im_names = [self.image_names[row][0], self.image_names[row][-1]]
-            years = [self.years[row][0] - self.min_year, self.years[row][-1] - self.min_year]
-            months = [self.months[row][0] - 1, self.months[row][-1] - 1]
-            hours = [self.hours[row][0], self.hours[row][-1]]
+            im_dirs = [im_dirs[0], im_dirs[-1]]
+            im_names = [im_names[0], im_names[-1]]
+            years = [years[0], years[-1]]
+            months = [months[0], months[-1]]
+            hours = [hours[0], hours[-1]]
+        elif self.t_len == 3:
+            im_dirs = [im_dirs[0], im_dirs[2], im_dirs[4]]
+            im_names = [im_names[0], im_names[2], im_names[4]]
+            years = [years[0], years[2], years[4]]
+            months = [months[0], months[2], months[4]]
+            hours = [hours[0], hours[2], hours[4]]
         elif self.t_len == 5:
-            im_dirs = list(self.image_dirs[row])
-            im_names = list(self.image_names[row])
-            years = list(self.years[row] - self.min_year)
-            months = list(self.months[row] - 1)
-            hours = list(self.hours[row])
+            pass
+        else:
+            raise NotImplementedError()
 
         im_paths = []
         for path, name in zip(im_dirs, im_names):
