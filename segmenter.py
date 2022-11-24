@@ -264,21 +264,68 @@ class TemporalSegmenter(nn.Module):
 
 
 class IoUBCE(nn.Module):
-    def __init__(self, n_cls, alpha=0.25):
+    def __init__(self, n_cls, alpha=0.25, eps=1e-7, log_loss=True):
         super().__init__()
         self.n_cls = n_cls
         self.a = alpha
+        self.eps = eps
+        self.log_loss = log_loss
+
+    @staticmethod
+    def soft_jaccard_score(
+            output: torch.Tensor, target: torch.Tensor, smooth: float = 0.0, eps: float = 1e-7, dims=None
+    ) -> torch.Tensor:
+        """
+        https://github.com/BloodAxe/pytorch-toolbelt/blob/21e24bcebf4f8c190301a4cd28bb578543110b9c/pytorch_toolbelt/losses/functional.py#L165
+        :param output:
+        :param target:
+        :param smooth:
+        :param eps:
+        :param dims:
+        :return:
+        Shape:
+            - Input: :math:`(N, NC, *)` where :math:`*` means
+                any number of additional dimensions
+            - Target: :math:`(N, NC, *)`, same shape as the input
+            - Output: scalar.
+        """
+        assert output.size() == target.size()
+
+        if dims is not None:
+            intersection = torch.sum(output * target, dim=dims)
+            cardinality = torch.sum(output + target, dim=dims)
+        else:
+            intersection = torch.sum(output * target)
+            cardinality = torch.sum(output + target)
+
+        union = cardinality - intersection
+        jaccard_score = (intersection + smooth) / (union + smooth).clamp_min(eps)
+        return jaccard_score
 
     def forward(self, pred, target):
         target = target.type(torch.long)
-        bce_target = F.one_hot(target, self.n_cls).permute(0, 3, 1, 2)  # (b, n_cls, h, w)
-        assert pred.shape == bce_target.shape
+        y_one_hot = F.one_hot(target, self.n_cls).permute(0, 3, 1, 2)  # (b, n_cls, h, w)
+        assert pred.shape == y_one_hot.shape
 
         # pos_weight = torch.ones((1, self.n_cls, 1, 1), device=pred.device) * 100.
         # pos_weight[:, 0, ...] = 1.  # downweight change class
-        bce = F.binary_cross_entropy_with_logits(pred, bce_target.float(),)  # pos_weight=pos_weight)
+        bce = F.binary_cross_entropy_with_logits(pred, y_one_hot.float(),)  # pos_weight=pos_weight)
 
+        b, n_cls, h, w = pred.shape
         prob = F.softmax(pred, dim=1)  # (b, n_cls, h, w)
-        iou = jaccard_index(prob, target, self.n_cls, threshold=0.5)
+        # iou = jaccard_index(prob, target, self.n_cls, threshold=0.5)
 
-        return self.a * bce + (1 - self.a) * iou
+        prob = prob.view(b, n_cls, -1)  # (b, n_cls, h*w)
+
+        y_one_hot = y_one_hot.reshape(b, n_cls, -1)  # (b, n_cls, h*w)
+        iou = self.soft_jaccard_score(prob, y_one_hot.type(prob.dtype), eps=self.eps, dims=(0, 2))  # (n_cls,)
+
+        if self.log_loss:
+            iou_loss = -iou.clamp_min(self.eps).log()
+        else:
+            iou_loss = 1. - iou
+
+        mask = y_one_hot.sum((0, 2)) > 0.  # (n_cls)
+        iou_loss = (iou_loss * mask.float()).mean()
+
+        return self.a * bce + (1 - self.a) * iou_loss
