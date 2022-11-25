@@ -49,7 +49,7 @@ def get_args_parser():
 
     # Model parameters
     parser.add_argument('--model_type', default=None, choices=['group_c', 'resnet', 'resnet_pre',
-                                                               'temporal', 'vanilla', 'segmenter'],
+                                                               'temporal', 'vanilla', 'segmenter', 'segmenter_mask'],
                         help='Use channel model')
     parser.add_argument('--model', default='vit_large_patch16', type=str, metavar='MODEL',
                         help='Name of model to train')
@@ -269,7 +269,7 @@ def main(args):
     elif args.model_type == 'resnet' or args.model_type == 'resnet_pre':
         pre_trained = args.model_type == 'resnet_pre'
         model = models_resnet.__dict__[args.model](in_c=dataset_train.in_c, pretrained=pre_trained)
-    elif args.model_type == 'temporal' or args.model_type == 'segmenter':
+    elif args.model_type == 'temporal' or args.model_type.startswith('segmenter'):
         model = models_vit_temporal.__dict__[args.model](
             num_classes=args.nb_classes,
             drop_path_rate=args.drop_path,
@@ -320,16 +320,19 @@ def main(args):
         # trunc_normal_(model.head.weight, std=2e-5)
 
     ## Create segmenter
-    if args.model_type == 'segmenter':
+    if args.model_type.startswith('segmenter'):
         patch_size = model.patch_embed.patch_size[0]
-        decoder = segmenter.MaskTransformer(n_cls=args.nb_classes,
-                                            patch_size=patch_size,
-                                            d_encoder=model.embed_dim,
-                                            n_heads=model.embed_dim//64,
-                                            d_model=model.embed_dim,
-                                            d_ff=4*model.embed_dim,
-                                            n_layers=2,
-                                            drop_path_rate=0.0, dropout=0.1)
+        if args.model_type.endswith('mask'):
+            decoder = segmenter.MaskTransformer(n_cls=args.nb_classes,
+                                                patch_size=patch_size,
+                                                d_encoder=model.embed_dim,
+                                                n_heads=model.embed_dim//64,
+                                                d_model=model.embed_dim,
+                                                d_ff=4*model.embed_dim,
+                                                n_layers=2,
+                                                drop_path_rate=0.0, dropout=0.1)
+        else:
+            decoder = segmenter.DecoderLinear(n_cls=args.nb_classes, patch_size=patch_size, d_encoder=model.embed_dim)
         model = segmenter.TemporalSegmenter(model, decoder, n_cls=args.nb_classes)
 
     model.to(device)
@@ -358,7 +361,7 @@ def main(args):
     # build optimizer with layer-wise lr decay (lrd)
     if args.model_type is not None and args.model_type.startswith('resnet'):
         param_groups = model_without_ddp.parameters()
-    elif args.model_type == 'segmenter':
+    elif args.model_type.startswith('segmenter'):
         param_groups = lrd.param_groups_segmenter_lrd(model_without_ddp, args.weight_decay,
                                                       no_weight_decay_list=model_without_ddp.no_weight_decay(),
                                                       layer_decay=args.layer_decay)
@@ -377,7 +380,7 @@ def main(args):
     else:
         criterion = torch.nn.CrossEntropyLoss()
 
-    if args.model_type == 'segmenter':
+    if args.model_type.startswith('segmenter'):
         criterion = segmenter.IoUBCE(args.nb_classes, alpha=args.bce_alpha, use_ce=args.use_ce)
 
     print("criterion = %s" % str(criterion))
@@ -393,7 +396,7 @@ def main(args):
     if args.eval:
         if args.model_type == 'temporal':
             test_stats = evaluate_temporal(data_loader_val, model, device)
-        elif args.model_type == 'segmenter':
+        elif args.model_type.startswith('segmenter'):
             test_stats = evaluate_segmenter(data_loader_val, model, device)
         else:
             test_stats = evaluate(data_loader_val, model, device)
@@ -408,7 +411,7 @@ def main(args):
         if args.distributed:
             data_loader_train.sampler.set_epoch(epoch)
 
-        if args.model_type == 'temporal' or args.model_type == 'segmenter':
+        if args.model_type == 'temporal' or args.model_type.startswith('segmenter'):
             train_stats = train_one_epoch_temporal(
                 model, criterion, data_loader_train,
                 optimizer, device, epoch, loss_scaler,
@@ -432,7 +435,7 @@ def main(args):
 
         if args.model_type == 'temporal':
             test_stats = evaluate_temporal(data_loader_val, model, device)
-        elif args.model_type == 'segmenter':
+        elif args.model_type.startswith('segmenter'):
             test_stats = evaluate_segmenter(data_loader_val, model, device)
         else:
             test_stats = evaluate(data_loader_val, model, device)

@@ -9,6 +9,40 @@ from timm.models.layers import DropPath
 from timm.models.layers import trunc_normal_
 
 
+def init_weights(m):
+    if isinstance(m, nn.Linear):
+        trunc_normal_(m.weight, std=0.02)
+        if isinstance(m, nn.Linear) and m.bias is not None:
+            nn.init.constant_(m.bias, 0)
+    elif isinstance(m, nn.LayerNorm):
+        nn.init.constant_(m.bias, 0)
+        nn.init.constant_(m.weight, 1.0)
+
+
+class DecoderLinear(nn.Module):
+    def __init__(self, n_cls, patch_size, d_encoder):
+        super().__init__()
+
+        self.d_encoder = d_encoder
+        self.patch_size = patch_size
+        self.n_cls = n_cls
+
+        self.head = nn.Linear(self.d_encoder, n_cls)
+        self.apply(init_weights)
+
+    @torch.jit.ignore
+    def no_weight_decay(self):
+        return set()
+
+    def forward(self, x, im_size):
+        H, W = im_size
+        GS = H // self.patch_size
+        x = self.head(x)
+        x = rearrange(x, "b (h w) c -> b c h w", h=GS)
+
+        return x
+
+
 class FeedForward(nn.Module):
     def __init__(self, dim, hidden_dim, dropout, out_dim=None):
         super().__init__()
@@ -127,18 +161,8 @@ class MaskTransformer(nn.Module):
         self.decoder_norm = nn.LayerNorm(d_model)
         self.mask_norm = nn.LayerNorm(n_cls)
 
-        self.apply(self.init_weights)
+        self.apply(init_weights)
         trunc_normal_(self.cls_emb, std=0.02)
-
-    @staticmethod
-    def init_weights(m):
-        if isinstance(m, nn.Linear):
-            trunc_normal_(m.weight, std=0.02)
-            if isinstance(m, nn.Linear) and m.bias is not None:
-                nn.init.constant_(m.bias, 0)
-        elif isinstance(m, nn.LayerNorm):
-            nn.init.constant_(m.bias, 0)
-            nn.init.constant_(m.weight, 1.0)
 
     @torch.jit.ignore
     def no_weight_decay(self):
