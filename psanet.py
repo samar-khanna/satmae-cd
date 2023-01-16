@@ -51,6 +51,10 @@ class PSA(nn.Module):
             nn.ReLU(inplace=True)
         )
 
+    @torch.jit.ignore
+    def no_weight_decay(self):
+        return set()
+
     def forward(self, x):
         out = x
         if self.psa_type in [0, 1]:
@@ -161,6 +165,16 @@ class PSANet(nn.Module):
             nn.Dropout2d(p=dropout),
             nn.Conv2d(256, classes, kernel_size=1)
         )
+
+    @torch.jit.ignore
+    def no_weight_decay(self):
+        def append_prefix_no_weight_decay(prefix, module):
+            return set(map(lambda x: prefix + x, module.no_weight_decay()))
+
+        nwd_params = append_prefix_no_weight_decay("encoder.", self.encoder).union(
+            append_prefix_no_weight_decay("psa.", self.psa)
+        )
+        return nwd_params
 
     def forward(self, im, ts, is_train=True):
         # print(x.shape)
