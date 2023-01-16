@@ -85,8 +85,8 @@ class PSA(nn.Module):
                 w = (w - 1) // self.shrink_factor + 1
                 x_col = F.interpolate(x_col, size=(h, w), mode='bilinear', align_corners=True)
                 x_dis = F.interpolate(x_dis, size=(h, w), mode='bilinear', align_corners=True)
-            y_col = self.attention(x_col)
-            y_dis = self.attention_p(x_dis)
+            y_col = self.attention(x_col).float()
+            y_dis = self.attention_p(x_dis).float()
             if self.compact:
                 y_dis = y_dis.view(n, h * w, h * w).transpose(1, 2).view(n, h * w, h, w)
             else:
