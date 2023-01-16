@@ -220,7 +220,7 @@ def evaluate(data_loader, model, device):
 
 
 @torch.no_grad()
-def evaluate_temporal(data_loader, model, device, model_type):
+def evaluate_temporal(data_loader, model, device):
     criterion = torch.nn.CrossEntropyLoss()
 
     metric_logger = misc.MetricLogger(delimiter="  ")
@@ -243,10 +243,7 @@ def evaluate_temporal(data_loader, model, device, model_type):
         # print("before pass model")
         # compute output
         with torch.cuda.amp.autocast():
-            if model_type.startswith('psa'):
-                output = model(images, timestamps, is_train=False)
-            else:
-                output = model(images, timestamps)
+            output = model(images, timestamps)
 
             # print(target.shape)
             loss = criterion(output, target)
@@ -311,7 +308,7 @@ def compute_cm_metrics(cm):
 
 
 @torch.no_grad()
-def evaluate_segmenter(data_loader, model, device):
+def evaluate_segmenter(data_loader, model, device, model_type):
     criterion = torch.nn.CrossEntropyLoss()
 
     metric_logger = misc.MetricLogger(delimiter="  ")
@@ -331,7 +328,10 @@ def evaluate_segmenter(data_loader, model, device):
         target = target.to(device, non_blocking=True)
 
         with torch.cuda.amp.autocast():
-            output = model(images, timestamps)
+            if model_type.startswith('psa'):
+                output = model(images, timestamps, is_train=False)
+            else:
+                output = model(images, timestamps)
 
             loss = criterion(output, target)
 

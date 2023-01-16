@@ -455,9 +455,9 @@ def main(args):
                 loss_scaler=loss_scaler, epoch=epoch)
 
         if args.model_type == 'temporal':
-            test_stats = evaluate_temporal(data_loader_val, model, device, args.model_type)
+            test_stats = evaluate_temporal(data_loader_val, model, device)
         elif args.model_type.startswith('segmenter') or args.model_type.startswith('psa'):
-            test_stats = evaluate_segmenter(data_loader_val, model, device)
+            test_stats = evaluate_segmenter(data_loader_val, model, device, args.model_type)
         else:
             test_stats = evaluate(data_loader_val, model, device)
 
