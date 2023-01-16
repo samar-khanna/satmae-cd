@@ -396,9 +396,9 @@ def main(args):
 
     ## Special criterion for time series change detection
     if args.model_type.startswith('segmenter'):
-        criterion = segmenter.IoUBCE(args.nb_classes, alpha=args.bce_alpha, use_ce=args.use_ce)
+        criterion = segmenter.IoUBCE(n_cls=args.nb_classes, alpha=args.bce_alpha, use_ce=args.use_ce)
     elif args.model_type.startswith('psa'):
-        criterion = segmenter.MultiIoUBCE(args.nb_classes, alpha=args.bce_alpha, use_ce=args.use_ce)
+        criterion = segmenter.MultiIoUBCE(n_cls=args.nb_classes, alpha=args.bce_alpha, use_ce=args.use_ce)
 
     print("criterion = %s" % str(criterion))
 
