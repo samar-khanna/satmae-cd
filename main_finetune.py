@@ -342,7 +342,7 @@ def main(args):
         mask_h = 2 * ((args.input_size - 1) // (2 * shrink_factor) + 1) - 1
         mask_w = 2 * ((args.input_size - 1) // (2 * shrink_factor) + 1) - 1
         model = psanet.PSANet(
-            model, classes=args.nb_classes, dropout=0.1, use_psa=True,
+            model, patch_size=patch_size, classes=args.nb_classes, dropout=0.1, use_psa=True,
             psa_type=2, compact=False, shrink_factor=2, mask_h=mask_h, mask_w=mask_w,
             normalization_factor=1.0, psa_softmax=True,
         )

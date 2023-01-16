@@ -2,6 +2,8 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 
+from einops import rearrange
+
 import lib.psa.functional as PF
 # import model.resnet as models
 # from model.vit import vit_large_patch16
@@ -105,7 +107,8 @@ class PSA(nn.Module):
 
 
 class PSANet(nn.Module):
-    def __init__(self, encoder, layers=50, dropout=0.1, classes=2, zoom_factor=8, use_psa=True, psa_type=2, compact=False,
+    def __init__(self, encoder, patch_size,
+                 layers=50, dropout=0.1, classes=2, zoom_factor=8, use_psa=True, psa_type=2, compact=False,
                  shrink_factor=2, mask_h=59, mask_w=59, normalization_factor=1.0, psa_softmax=True,
                  criterion=nn.CrossEntropyLoss(ignore_index=255), pretrained=False):
         super(PSANet, self).__init__()
@@ -119,6 +122,7 @@ class PSANet(nn.Module):
 
         self.use_vit = False
 
+        self.patch_size = patch_size
         self.encoder = encoder
 
         # if layers == 50:
@@ -193,6 +197,11 @@ class PSANet(nn.Module):
         h, w = im.size(3), im.size(4)
 
         x = self.encoder(im, ts, return_features=True)
+        # remove CLS/DIST tokens for decoding
+        x = x[:, 1:]  # (N, L, D)
+
+        GS = h // self.patch_size
+        x = rearrange(x, "b (h w) c -> b c h w", h=GS)
 
         x_tmp = x
 
