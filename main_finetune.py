@@ -271,7 +271,7 @@ def main(args):
     elif args.model_type == 'resnet' or args.model_type == 'resnet_pre':
         pre_trained = args.model_type == 'resnet_pre'
         model = models_resnet.__dict__[args.model](in_c=dataset_train.in_c, pretrained=pre_trained)
-    elif args.model_type == 'temporal' or args.model_type.startswith('segmenter'):
+    elif args.model_type == 'temporal' or args.model_type.startswith('segmenter') or args.model_type.startswith('psa'):
         model = models_vit_temporal.__dict__[args.model](
             num_classes=args.nb_classes,
             drop_path_rate=args.drop_path,
@@ -415,7 +415,7 @@ def main(args):
             test_stats = evaluate_temporal(data_loader_val, model, device)
 
         ## Separate case for temporal segmentation
-        elif args.model_type.startswith('segmenter'):
+        elif args.model_type.startswith('segmenter') or args.model_type.startswith('psa'):
             test_stats = evaluate_segmenter(data_loader_val, model, device, args.model_type)
         else:
             test_stats = evaluate(data_loader_val, model, device)
@@ -456,7 +456,7 @@ def main(args):
 
         if args.model_type == 'temporal':
             test_stats = evaluate_temporal(data_loader_val, model, device, args.model_type)
-        elif args.model_type.startswith('segmenter'):
+        elif args.model_type.startswith('segmenter') or args.model_type.startswith('psa'):
             test_stats = evaluate_segmenter(data_loader_val, model, device)
         else:
             test_stats = evaluate(data_loader_val, model, device)
