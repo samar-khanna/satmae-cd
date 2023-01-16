@@ -358,3 +358,21 @@ class IoUBCE(nn.Module):
         iou_loss = (iou_loss * mask.float()).mean()
 
         return self.a * bce + (1 - self.a) * iou_loss
+
+
+class MultiIoUBCE(IoUBCE):
+    def __init__(self, aux_weights=(1.0, 0.4), *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.aux_weights = aux_weights
+
+    def forward(self, preds, target):
+        if self.aux_weights is not None:
+            assert len(self.aux_weights) == len(preds)
+        else:
+            self.aux_weights = [1.0] * len(preds)
+
+        total_loss = 0.0
+        for i, pred in enumerate(preds):
+            total_loss = total_loss + self.aux_weights[i] * super().forward(pred, target)
+
+        return total_loss

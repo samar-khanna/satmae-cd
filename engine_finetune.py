@@ -220,7 +220,7 @@ def evaluate(data_loader, model, device):
 
 
 @torch.no_grad()
-def evaluate_temporal(data_loader, model, device):
+def evaluate_temporal(data_loader, model, device, model_type):
     criterion = torch.nn.CrossEntropyLoss()
 
     metric_logger = misc.MetricLogger(delimiter="  ")
@@ -243,7 +243,10 @@ def evaluate_temporal(data_loader, model, device):
         # print("before pass model")
         # compute output
         with torch.cuda.amp.autocast():
-            output = model(images, timestamps)
+            if model_type.startswith('psa'):
+                output = model(images, timestamps, is_train=False)
+            else:
+                output = model(images, timestamps)
 
             # print(target.shape)
             loss = criterion(output, target)

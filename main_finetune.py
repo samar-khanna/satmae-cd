@@ -34,6 +34,7 @@ import models_vit
 import models_vit_temporal
 import models_vit_group_channels
 import segmenter
+import psanet
 
 from engine_finetune import (train_one_epoch, train_one_epoch_temporal,
                              evaluate, evaluate_temporal, evaluate_segmenter)
@@ -49,7 +50,8 @@ def get_args_parser():
 
     # Model parameters
     parser.add_argument('--model_type', default=None, choices=['group_c', 'resnet', 'resnet_pre',
-                                                               'temporal', 'vanilla', 'segmenter', 'segmenter_mask'],
+                                                               'temporal', 'vanilla',
+                                                               'segmenter', 'segmenter_mask', 'psanet'],
                         help='Use channel model')
     parser.add_argument('--model', default='vit_large_patch16', type=str, metavar='MODEL',
                         help='Name of model to train')
@@ -334,6 +336,16 @@ def main(args):
         else:
             decoder = segmenter.DecoderLinear(n_cls=args.nb_classes, patch_size=patch_size, d_encoder=model.embed_dim)
         model = segmenter.TemporalSegmenter(model, decoder, n_cls=args.nb_classes)
+    elif args.model_type.startswith('psa'):
+        patch_size = model.patch_embed.patch_size[0]
+        shrink_factor = 2
+        mask_h = 2 * ((args.input_size - 1) // (2 * shrink_factor) + 1) - 1
+        mask_w = 2 * ((args.input_size - 1) // (2 * shrink_factor) + 1) - 1
+        model = psanet.PSANet(
+            model, classes=args.nb_classes, dropout=0.1, use_psa=True,
+            psa_type=2, compact=False, shrink_factor=2, mask_h=mask_h, mask_w=mask_w,
+            normalization_factor=1.0, psa_softmax=True,
+        )
 
     model.to(device)
 
@@ -380,8 +392,11 @@ def main(args):
     else:
         criterion = torch.nn.CrossEntropyLoss()
 
+    ## Special criterion for time series change detection
     if args.model_type.startswith('segmenter'):
         criterion = segmenter.IoUBCE(args.nb_classes, alpha=args.bce_alpha, use_ce=args.use_ce)
+    elif args.model_type.startswith('psa'):
+        criterion = segmenter.MultiIoUBCE(args.nb_classes, alpha=args.bce_alpha, use_ce=args.use_ce)
 
     print("criterion = %s" % str(criterion))
 
@@ -396,8 +411,10 @@ def main(args):
     if args.eval:
         if args.model_type == 'temporal':
             test_stats = evaluate_temporal(data_loader_val, model, device)
+
+        ## Separate case for temporal segmentation
         elif args.model_type.startswith('segmenter'):
-            test_stats = evaluate_segmenter(data_loader_val, model, device)
+            test_stats = evaluate_segmenter(data_loader_val, model, device, args.model_type)
         else:
             test_stats = evaluate(data_loader_val, model, device)
         print(f"Evaluation on {len(dataset_val)} test images- acc1: {test_stats['acc1']:.2f}%, "
@@ -411,6 +428,7 @@ def main(args):
         if args.distributed:
             data_loader_train.sampler.set_epoch(epoch)
 
+        ## Separate case for temporal segmentation
         if args.model_type == 'temporal' or args.model_type.startswith('segmenter'):
             train_stats = train_one_epoch_temporal(
                 model, criterion, data_loader_train,
@@ -434,7 +452,7 @@ def main(args):
                 loss_scaler=loss_scaler, epoch=epoch)
 
         if args.model_type == 'temporal':
-            test_stats = evaluate_temporal(data_loader_val, model, device)
+            test_stats = evaluate_temporal(data_loader_val, model, device, args.model_type)
         elif args.model_type.startswith('segmenter'):
             test_stats = evaluate_segmenter(data_loader_val, model, device)
         else:
