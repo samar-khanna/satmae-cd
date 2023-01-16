@@ -205,7 +205,7 @@ class PSANet(nn.Module):
 
         x_tmp = x
 
-        x = F.interpolate(x, size=(112, 112), mode='bilinear', align_corners=True)
+        x = F.interpolate(x, size=(51, 51), mode='bilinear', align_corners=True)
         # h = 401
         # w = 401
         # assert False
