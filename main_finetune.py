@@ -373,7 +373,9 @@ def main(args):
     # build optimizer with layer-wise lr decay (lrd)
     if args.model_type is not None and args.model_type.startswith('resnet'):
         param_groups = model_without_ddp.parameters()
-    elif args.model_type.startswith('segmenter'):
+
+    ## Separate handling for temporal change detection
+    elif args.model_type.startswith('segmenter') or args.model_type.startswith('psa'):
         param_groups = lrd.param_groups_segmenter_lrd(model_without_ddp, args.weight_decay,
                                                       no_weight_decay_list=model_without_ddp.no_weight_decay(),
                                                       layer_decay=args.layer_decay)
