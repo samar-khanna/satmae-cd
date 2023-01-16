@@ -431,7 +431,8 @@ def main(args):
             data_loader_train.sampler.set_epoch(epoch)
 
         ## Separate case for temporal segmentation
-        if args.model_type == 'temporal' or args.model_type.startswith('segmenter'):
+        if args.model_type == 'temporal' or args.model_type.startswith('segmenter') \
+                or args.model_type.startswith('psa'):
             train_stats = train_one_epoch_temporal(
                 model, criterion, data_loader_train,
                 optimizer, device, epoch, loss_scaler,
